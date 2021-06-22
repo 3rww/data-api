@@ -11,7 +11,7 @@ services:
     rainfall_db:
         image: quay.io/azavea/postgis:3-postgres12.2-slim
         ports: 
-            - "5435:5435"
+            - "5435:5432"
         restart: always
         volumes:
             - /var/lib/postgresql/data/
@@ -22,8 +22,19 @@ services:
             dockerfile: docker/db-init/Dockerfile
         depends_on:
             - db
+        env_file: .env.docker
+    rainfall-db-init:
+        build:
+            context: .
+            dockerfile: docker/rainfall-db-init/Dockerfile
+        depends_on:
             - rainfall_db
         env_file: .env.docker
+    redis:
+        image: redis:alpine
+        ports:
+            - "6379:6379"
+        env_file: .env.docker             
     app:
         build: 
             context: .
@@ -31,6 +42,7 @@ services:
         command: python3 manage.py runserver 0.0.0.0:7000
         depends_on:
             - db
+            - rainfall_db
             - redis
         ports:
             - "7000:7000"
@@ -48,9 +60,4 @@ services:
             DEBUG: 1
         volumes:
             - .:/code
-        env_file: .env.docker
-    redis:
-        image: redis:alpine
-        ports:
-            - "6379:6379"
         env_file: .env.docker

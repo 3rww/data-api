@@ -21,4 +21,4 @@ RUN pip install -r requirements.txt
 
 COPY . /code/
 
-CMD [ "./docker/db-init/wait-for-postgres.sh", "db", "./docker/db-init/startup.sh" ]
+CMD [ "./docker/rainfall-db-init/wait-for-postgres.sh", "rainfall_db", "./docker/rainfall-db-init/startup.sh" ]
