@@ -138,14 +138,6 @@ class Garr5Record(RainfallRecordMixin):
     """
     pass
 
-
-# TODO: create a class for managing and validating the contents of 
-# the RainfallObservationMeta data and metadata fields
-# @dataclass
-# class RainfallObservationsJSON():
-# pass
-
-
 # --------------------------------------------------------------
 # Reports + Rainfall Events
 

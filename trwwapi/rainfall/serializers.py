@@ -25,7 +25,11 @@ from ..common.config import (
 )
 from .api_v2.utils import datetime_encoder, dt_parser
 
-from .models import GarrObservation, GaugeObservation, RtrrObservation, RtrgObservation, RainfallEvent, Pixel, Gauge
+from .models import (
+    GarrObservation, GaugeObservation, RtrrObservation, RtrgObservation, 
+    RainfallEvent, Pixel, Gauge,
+    GarrRecord, GaugeRecord, RtrrRecord, RtrgRecord
+)
 
 from rest_framework import serializers
 
@@ -82,6 +86,30 @@ class GaugeSerializer(GeoFeatureModelSerializer):
     class Meta:
         model = Gauge
         geo_field = "geom"
+        fields = '__all__'
+
+
+class GarrRecordSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = GarrRecord
+        fields = '__all__'
+
+
+class GaugeRecordSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = GaugeRecord
+        fields = '__all__'
+
+
+class RtrgRecordSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = RtrgRecord
+        fields = '__all__'
+
+
+class RtrrRecordSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = RtrrRecord
         fields = '__all__'
 
 

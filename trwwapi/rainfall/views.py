@@ -14,11 +14,19 @@ from ..common.config import TZI
 # from .api_v2.config import TZI
 
 from .serializers import (
-    GarrObservationSerializer, 
-    GaugeObservationSerializer, 
+    GarrObservationSerializer,
+    GarrRecordSerializer, 
+    GaugeObservationSerializer,
+    GaugeRecordSerializer,
+    RtrgRecordSerializer, 
     RtrrObservationSerializer, 
     RtrgObservationSerializer,
-    RainfallEventSerializer
+    RainfallEventSerializer,
+    RtrrRecordSerializer,
+    GarrRecordSerializer,
+    GaugeRecordSerializer,
+    RtrrRecordSerializer,
+    RtrgRecordSerializer
 )
 from .selectors import (
     handle_request_for,
@@ -29,10 +37,14 @@ from .selectors import (
     get_latest_rtrrobservation
 )
 from .models import (
-    GarrObservation, 
-    GaugeObservation, 
+    GarrObservation,
+    GarrRecord, 
+    GaugeObservation,
+    GaugeRecord, 
     RtrrObservation, 
+    RtrrRecord,
     RtrgObservation,
+    RtrgRecord,
     RainfallEvent, 
     Pixel, 
     Gauge
@@ -144,43 +156,43 @@ class RainfallEventViewset(viewsets.ReadOnlyModelViewSet):
     filterset_class = RainfallEventFilter
 
 
-class GarrObservationViewset(viewsets.ReadOnlyModelViewSet):
+class GarrRecordViewset(viewsets.ReadOnlyModelViewSet):
     """
     Get calibrated, gauge-adjusted radar rainfall observations for 15-minute time intervals. Data created by Vieux Associates for 3 Rivers Wet Weather from available NEXRAD and local rain gauges.
     """    
-    queryset = GarrObservation.objects.all()
-    serializer_class  = GarrObservationSerializer
+    queryset = GarrRecord.objects.all()
+    serializer_class  = GarrRecordSerializer
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
     lookup_field = 'timestamp'
     pagination_class = PixelResultsSetPagination
 
 
-class GaugeObservationViewset(viewsets.ReadOnlyModelViewSet):
+class GaugeRecordViewset(viewsets.ReadOnlyModelViewSet):
     """
     Get QA/QC'd rainfall gauge observations for 15-minute time intervals. Data captured by 3 Rivers Wet Weather and ALCOSAN.
     """
-    queryset = GaugeObservation.objects.all()
-    serializer_class  = GaugeObservationSerializer
+    queryset = GaugeRecord.objects.all()
+    serializer_class  = GaugeRecordSerializer
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
     lookup_field='timestamp'
     pagination_class = GaugeResultsSetPagination
 
-class RtrrObservationViewset(viewsets.ReadOnlyModelViewSet):
+class RtrrRecordViewset(viewsets.ReadOnlyModelViewSet):
     """
     Get real-time radar rainfall observations for 15-minute time intervals. Data captured by Vieux Associates from NEXRAD radar in Moon Township, PA for 3 Rivers Wet Weather. Please note that this data is provisional.
     """  
-    queryset = RtrrObservation.objects.all()
-    serializer_class  = RtrrObservationSerializer
+    queryset = RtrrRecord.objects.all()
+    serializer_class  = RtrrRecordSerializer
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
     lookup_field='timestamp'
     pagination_class = PixelResultsSetPagination
 
-class RtrgbservationViewset(viewsets.ReadOnlyModelViewSet):
+class RtrgRecordViewset(viewsets.ReadOnlyModelViewSet):
     """
     Get real-time rainfall gauge observations for 15-minute time intervals. Data captured by 3 Rivers Wet Weather and Datawise. Please note that this data is provisional and that observations may be missing due to technical/transmission difficulties.
     """
-    queryset = RtrgObservation.objects.all()
-    serializer_class  = RtrgObservationSerializer
+    queryset = RtrgRecord.objects.all()
+    serializer_class  = RtrgRecordSerializer
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
     lookup_field='timestamp'
     pagination_class = GaugeResultsSetPagination
