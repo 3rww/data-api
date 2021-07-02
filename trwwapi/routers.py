@@ -26,6 +26,7 @@ class ModelDatabaseRouter:
 class RainfallDbRouter:
 
     route_app_labels = {'rainfall'}
+    rainfall_db = 'rainfall_db'
 
     def db_for_read(self, model, **hints):
         """
@@ -33,7 +34,7 @@ class RainfallDbRouter:
         """
         if model._meta.app_label in self.route_app_labels:
             return 'rainfall_db'
-        return None
+        return 'default'
 
     def db_for_write(self, model, **hints):
         """
@@ -41,7 +42,7 @@ class RainfallDbRouter:
         """
         if model._meta.app_label in self.route_app_labels:
             return 'rainfall_db'
-        return None
+        return 'default'
 
     def allow_relation(self, obj1, obj2, **hints):
         """
@@ -60,6 +61,22 @@ class RainfallDbRouter:
         Make sure the rainfall app only appears in the
         'rainfall' database.
         """
+        # print(db, app_label, model_name)
         if app_label in self.route_app_labels:
-            return db == 'rainfall_db'
-        return None        
+            return db == self.rainfall_db
+        return None
+
+
+class DefaultRouter:
+
+    def db_for_read(self, model, **hints):
+        return 'default'
+
+    def db_for_write(self, model, **hints):
+        return 'default'
+
+    def allow_relation(self, obj1, obj2, **hints):
+        return None
+
+    def allow_migrate(self, db, app_label, model_name=None, **hints):
+        return True

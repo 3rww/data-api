@@ -137,7 +137,7 @@ if 'RAINFALL_RDS_DATABASE_URL' in os.environ.keys():
     DATABASES['rainfall_db'].update(rainfall_db_from_env)
     DATABASES['rainfall_db']['ENGINE'] = 'django.contrib.gis.db.backends.postgis'
 
-DATABASE_ROUTERS = ('trwwapi.routers.RainfallDbRouter',)
+DATABASE_ROUTERS = ('trwwapi.routers.RainfallDbRouter','trwwapi.routers.DefaultRouter')
 
 # caching
 CACHES = {
