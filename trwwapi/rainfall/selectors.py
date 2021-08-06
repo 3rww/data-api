@@ -188,7 +188,7 @@ def get_rainfall_data(postgres_table_model, raw_args=None):
     if record_count > MAX_RECORDS:
         messages.add("The request is unfortunately a bit more than we can handle for you right now: this query would return {0:,} data points and we can handle ~{1:,} at the moment. Please reduce the date/time range.".format(record_count, MAX_RECORDS))
         response = ResponseSchema(
-            status_code=status.HTTP_416_REQUESTED_RANGE_NOT_SATISFIABLE,
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             request_args=args,
             messages=messages.messages
         )
@@ -270,8 +270,8 @@ def handle_request_for(rainfall_model, request, *args, **kwargs):
     URL to the job results. Responsible for forming the shape, but not content, 
     of the response.
     """
-    logger.debug("STARTING handle_request_for")
-    logger.debug(objgraph.show_growth())
+    # logger.debug("STARTING handle_request_for")
+    # logger.debug(objgraph.show_growth())
 
     job_meta = None
     raw_args = _parse_request(request)
@@ -333,7 +333,7 @@ def handle_request_for(rainfall_model, request, *args, **kwargs):
                     meta=job_meta
                 )
 
-            logger.debug(objgraph.show_growth())
+            # logger.debug(objgraph.show_growth())
             gc.collect()
             return Response(response.as_dict(), status=response.status_code)
         else:
@@ -344,7 +344,7 @@ def handle_request_for(rainfall_model, request, *args, **kwargs):
                 messages=['The requested job {} does not exist.'.format(kwargs['jobid'])],
                 meta=job_meta
             )
-            logger.debug(objgraph.show_growth())
+            # logger.debug(objgraph.show_growth())
             gc.collect()
             return Response(response.as_dict(), status=response.status_code)
 
@@ -366,7 +366,7 @@ def handle_request_for(rainfall_model, request, *args, **kwargs):
         )
 
         # return redirect(job_url)
-        logger.debug(objgraph.show_growth()) 
+        # logger.debug(objgraph.show_growth()) 
         gc.collect()
         return Response(response.as_dict(), status=status.HTTP_200_OK)
 

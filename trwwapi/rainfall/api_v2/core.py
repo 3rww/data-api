@@ -21,6 +21,7 @@ from django.db.models import Q
 
 from .models import RequestSchema, RainfallObservation, TableGARR15, TableGauge15, TableRTRR15
 from .utils import datetime_range, dt_parser
+from ..models import RtrgObservation
 from ...common.config import (
 #from .config import (
     DATA_DIR,
@@ -340,6 +341,9 @@ def _query_pgdb(postgres_table_model, query, query_params):
 
 @Timer(name="query_pgdb__postprocess_pg_response", text="{name}: {:.4f}s")
 def _postprocess_pg_response(postgres_table_model, queryset, timezone=TZ):
+    """This function is primarily concerned with transforming the timestamps
+    from the database to local time and ISO format.
+    """
 
     # if len(queryset) > 0:
         # read results into a dataframe:
@@ -374,17 +378,40 @@ def _postprocess_pg_response(postgres_table_model, queryset, timezone=TZ):
     #     return []
 
 
-    rows = [
-        dict(
-            ts=r.ts.astimezone(TZ).isoformat(),
-            id=str(r.id),
-            val=r.val,
-            src=r.src
-        )
-        for r in queryset
-    ]
+    # NOTE: Real-time gauge data is currently being stored with a timestamp that is 3-hours ahead of 
+    # the actual recorded time, due to an error in timezone representation with the data source.
+    # Here, we are subtracting 3-hours to fix that representation.
+    # TODO: remove this bit of code by fixing the rainfall pipeline for RTRG to convert the timezone 
+    # correctly, and back-fix all timestamps in the object store and database
+    # See https://github.com/3rww/rainfall/issues/17
+    # See https://github.com/3rww/rainfall-pipelines/issues/1    
+
+    if postgres_table_model == RtrgObservation:
+
+        rows = [
+            dict(
+                ts=(r.ts.astimezone(TZ)-timedelta(hours=3)).isoformat(),
+                id=str(r.id),
+                val=r.val,
+                src=r.src
+            )
+            for r in queryset
+        ]            
+
+    else:
+
+        rows = [
+            dict(
+                ts=r.ts.astimezone(TZ).isoformat(),
+                id=str(r.id),
+                val=r.val,
+                src=r.src
+            )
+            for r in queryset
+        ]
 
     # pdb.set_trace()
+    # print(rows)
 
     return rows        
 
