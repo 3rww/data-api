@@ -377,6 +377,9 @@ def handle_request_for(rainfall_model, request, *args, **kwargs):
 # ------------------------------------------------------------------------------
 # SELECTORS
 
+# -----------------------
+# get latest observation timestamps
+
 def _get_latest(model_class, timestamp_field="ts"):
     """gets the latest record from the model, by default using the 
     timestamp_field arg. Returns a single instance of model_class.
@@ -411,3 +414,9 @@ def get_latest_rtrgobservation():
 
 def get_latest_rainfallevent():
     return _get_latest(RainfallEvent, 'start_dt')
+
+# -----------------------
+# get records using a timestamp delta
+
+def _get_ts_by_delta(model_class, timedelta_kwargs):
+    return model_class.objects.filter(ts__gte=(datetime.now()-timedelta(**timedelta_kwargs)))

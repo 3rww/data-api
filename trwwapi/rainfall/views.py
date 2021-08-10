@@ -236,70 +236,60 @@ class GarrRecordFilter(RainfallRecordFilter):
         fields = ['pixel', 'start_dt', 'end_dt']
 
 
-class GarrRecordViewset(viewsets.ReadOnlyModelViewSet):
+# --------------------
+# Default Rainfall Record Viewsets
+
+class RainfallRecordReadOnlyViewset(viewsets.ReadOnlyModelViewSet):
+    """parent class, provides shared properties for the default rainfall record model-based viewsets"""
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    lookup_field = 'timestamp'
+    filter_backends = (DjangoFilterBackend,)
+
+
+class GarrRecordViewset(RainfallRecordReadOnlyViewset):
     """
     Get calibrated, gauge-adjusted radar rainfall observations for 15-minute time intervals. Data created by Vieux Associates for 3 Rivers Wet Weather from available NEXRAD and local rain gauges.
     """    
     queryset = GarrRecord.objects.all()
     serializer_class  = GarrRecordSerializer
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
-    lookup_field = 'timestamp'
-
+    filterset_class = GarrRecordFilter
     pagination_class = PixelResultsSetPagination2
 
-    filter_backends = (DjangoFilterBackend,)
-    # filterset_fields = ['ts', 'sid']
-    filterset_class = GarrRecordFilter
 
-
-class GaugeRecordViewset(viewsets.ReadOnlyModelViewSet):
+class GaugeRecordViewset(RainfallRecordReadOnlyViewset):
     """
     Get QA/QC'd rainfall gauge observations for 15-minute time intervals. Data captured by 3 Rivers Wet Weather and ALCOSAN.
     """
     queryset = GaugeRecord.objects.all()
     serializer_class  = GaugeRecordSerializer
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
-    lookup_field='timestamp'
+    filterset_class = GaugeRecordFilter
     pagination_class = GaugeResultsSetPagination2
-    filter_backends = (DjangoFilterBackend,)
-    # filterset_fields = ['ts', 'sid']
-    filterset_class = GaugeRecordFilter    
 
 
-class RtrrRecordViewset(viewsets.ReadOnlyModelViewSet):
+class RtrrRecordViewset(RainfallRecordReadOnlyViewset):
     """
     Get real-time radar rainfall observations for 15-minute time intervals. Data captured by Vieux Associates from NEXRAD radar in Moon Township, PA for 3 Rivers Wet Weather. Please note that this data is provisional.
     """
     queryset = RtrrRecord.objects.all()
-    # queryset = RtrrRecord.objects.raw("""Select ts, sid, val from {0};""".format(RtrrRecord.objects.model._meta.db_table))
     serializer_class  = RtrrRecordSerializer
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
-    lookup_field='timestamp'
+    filterset_class = RtrrRecordFilter
     pagination_class = PixelResultsSetPagination2
-    filter_backends = (DjangoFilterBackend,)
-    # filterset_fields = ['ts', 'sid']
-    filterset_class = RtrrRecordFilter    
 
 
-class RtrgRecordViewset(viewsets.ReadOnlyModelViewSet):
+class RtrgRecordViewset(RainfallRecordReadOnlyViewset):
     """
     Get real-time rainfall gauge observations for 15-minute time intervals. Data captured by 3 Rivers Wet Weather and Datawise. Please note that this data is provisional and that observations may be missing due to technical/transmission difficulties.
     """
     queryset = RtrgRecord.objects.all()
     serializer_class  = RtrgRecordSerializer
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
-    lookup_field='timestamp'
+    filterset_class = RtrgRecordFilter
     pagination_class = GaugeResultsSetPagination2
-    filter_backends = (DjangoFilterBackend,)
-    # filterset_fields = ['ts', 'sid']
-    filterset_class = RtrgRecordFilter    
+    
 
 # -------------------------------------------------------------------
 # HELPER VIEWS
 # These provide helpers for specific use cases
 
-# @api_view(['GET'])
-# def get_latest_observation_timestamps_summary(request):
 class LatestObservationTimestampsSummary(viewsets.ReadOnlyModelViewSet):
     
     def list(self, request, format=None):
