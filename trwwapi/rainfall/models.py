@@ -63,6 +63,72 @@ class RtrgObservation(RainfallObservationMeta):
     """    
     pass
 
+# TODO: create a class for managing and validating the contents of 
+# the RainfallObservationMeta data and metadata fields
+# @dataclass
+# class RainfallObservationsJSON():
+# pass
+
+# --------------------------------------------------------------
+# Rainfall Record Models
+# Each record is a single observation per timestamp per sensor; tables are long but not wide.
+# All of these are unmanaged by Django. They use a composite primary key (ts+sid) and time-based 
+# partitioning, neither of which can be managed by Django.
+
+class RainfallRecordMixin(PandasModelMixin):
+
+    # id = models.BigAutoField()
+    ts = models.DateTimeField(db_index=True, verbose_name="Timestamp")
+    sid = models.CharField(max_length=12, db_index=True, verbose_name="Sensor ID")
+    val = models.FloatField(verbose_name="Rainfall (inches)", blank=True, null=True)
+    src = models.CharField(max_length=4, verbose_name="Source", blank=True, null=True)
+
+    class Meta:
+        abstract = True
+        ordering = ['-ts', 'sid']
+        constraints = [
+            UniqueConstraint(fields=['ts', 'sid'], name='%(class)s_uniq_record_constraint')
+        ]
+        in_db = "rainfall_db"
+        managed = False
+    
+
+class GaugeRecord(RainfallRecordMixin):
+    """Calibrated Rain Gauge data (historic)
+    """
+    pass
+
+
+class GarrRecord(RainfallRecordMixin):
+    """Gauge-Adjusted Radar Rainfall (historic)
+    """
+    pass
+
+
+class RtrrRecord(RainfallRecordMixin):
+    """Raw Radar data (real-time)
+    """        
+    pass
+
+
+class RtrgRecord(RainfallRecordMixin):
+    """Raw Rain Gauge data (real-time)
+    """
+    pass
+
+class Rtrg5Record(RainfallRecordMixin):
+    """Raw Rain Gauge data (real-time, 5-minute)
+    """
+    pass
+
+class Garr5Record(RainfallRecordMixin):
+    """Gauge-Adjusted Radar Rainfall (historic, 5-minute)
+    """
+    pass
+
+# --------------------------------------------------------------
+# Reports + Rainfall Events
+
 
 class RainfallReport(TimestampedMixin):
     month_start = models.DateField()

@@ -120,15 +120,24 @@ DATABASES = {
 # use the connection string in DATABASE_URL if found in environment
 # (utilized by Heroku, can optionally be used locally to override)
 if 'DATABASE_URL' in os.environ.keys():
-    db_from_env = dj_database_url.config(conn_max_age=600, ssl_require=True)
+    db_from_env = dj_database_url.config(conn_max_age=600, ssl_require=True) # gets from DATABASE_URL environment variable
     DATABASES['default'].update(db_from_env)
     DATABASES['default']['ENGINE'] = 'django.contrib.gis.db.backends.postgis'
+
+if 'RAINFALL_RDS_DATABASE_URL' in os.environ.keys():
+    DATABASES['rainfall_db'] = dj_database_url.parse(os.getenv('RAINFALL_RDS_DATABASE_URL'), conn_max_age=600, ssl_require=True)
+    DATABASES['rainfall_db']['ENGINE'] = 'django.contrib.gis.db.backends.postgis'
+
+DATABASE_ROUTERS = (
+    'trwwapi.routers.RainfallDbRouter',
+    'trwwapi.routers.DefaultRouter'
+)
 
 # caching
 CACHES = {
     'default': {
         'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-        'TIMEOUT': 15,
+        # 'TIMEOUT': 15,
         'OPTIONS': {
             'MAX_ENTRIES': 10
         }
@@ -313,3 +322,4 @@ LOGGING = {
 DEBUG_TOOLBAR_CONFIG = {
     'SHOW_TOOLBAR_CALLBACK': lambda request: DEBUG,
 }
+

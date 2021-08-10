@@ -15,7 +15,7 @@ import petl as etl
 from codetiming import Timer
 from dateutil.relativedelta import relativedelta
 
-from ..rainfall.api_v3.core import query_one_sensor_rollup_monthly
+from ..rainfall.api_v2.core import query_one_sensor_rollup_monthly
 from ..rainfall.models import (
     RtrrObservation, 
     Pixel

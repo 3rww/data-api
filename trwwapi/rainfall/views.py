@@ -1,7 +1,9 @@
 from datetime import timedelta
+from collections import OrderedDict
 # from django.contrib.auth.models import User, Group
 from django.utils.safestring import mark_safe
-from django.conf import settings
+from django.core.paginator import Paginator
+from django.utils.functional import cached_property
 from django_filters import filters
 from django.contrib.gis.geos import Point
 from django.shortcuts import render
@@ -10,7 +12,7 @@ from rest_framework.views import APIView
 from rest_framework.generics import GenericAPIView
 from rest_framework import viewsets, permissions, routers
 from rest_framework.decorators import api_view
-from rest_framework.pagination import PageNumberPagination
+from rest_framework.pagination import PageNumberPagination, CursorPagination 
 from django_filters.rest_framework import FilterSet, DjangoFilterBackend
 
 
@@ -19,11 +21,19 @@ from ..common.config import TZI
 # from .api_v2.config import TZI
 
 from .serializers import (
-    GarrObservationSerializer, 
-    GaugeObservationSerializer, 
+    GarrObservationSerializer,
+    GarrRecordSerializer, 
+    GaugeObservationSerializer,
+    GaugeRecordSerializer,
+    RtrgRecordSerializer, 
     RtrrObservationSerializer, 
     RtrgObservationSerializer,
-    RainfallEventSerializer
+    RainfallEventSerializer,
+    RtrrRecordSerializer,
+    GarrRecordSerializer,
+    GaugeRecordSerializer,
+    RtrrRecordSerializer,
+    RtrgRecordSerializer
 )
 from .selectors import (
     handle_request_for,
@@ -35,10 +45,14 @@ from .selectors import (
     get_rainfall_total_for
 )
 from .models import (
-    GarrObservation, 
-    GaugeObservation, 
+    GarrObservation,
+    GarrRecord, 
+    GaugeObservation,
+    GaugeRecord, 
     RtrrObservation, 
+    RtrrRecord,
     RtrgObservation,
+    RtrgRecord,
     RainfallEvent, 
     Pixel, 
     Gauge
@@ -119,15 +133,49 @@ class RainfallRtrgApiView(GenericAPIView):
 # These return paginated data from the tables in the database as-is.
 # They show up in the django-rest-framework's explorable API pages.
 
+# --------------------
+# ViewSet Pagination:
+
+class FasterDjangoPaginator(Paginator):
+    @cached_property
+    def count(self):
+        # only select 'id' for counting, much cheaper
+        #return self.object_list.values('id').count()
+        return len(self.object_list)
+
+class NoCountPaginator(Paginator):
+    def count(self):
+        return 0
+
 class PixelResultsSetPagination(PageNumberPagination):
     page_size = 1
     page_size_query_param = 'page_size'
     max_page_size = 3
 
+class PixelResultsSetPagination2(CursorPagination):
+    page_size = 50
+    page_size_query_param = 'page_size'
+    ordering = ['-ts', 'sid']
+    # django_paginator_class = NoCountPaginator
+    # def get_paginated_response(self, data):
+    #     return Response(OrderedDict([
+    #         ('next', self.get_next_link()),
+    #         ('previous', self.get_previous_link()),
+    #         ('results', data)
+    #     ]))
+
 class GaugeResultsSetPagination(PageNumberPagination):
     page_size = 5
     page_size_query_param = 'page_size'
     max_page_size = 10
+
+class GaugeResultsSetPagination2(CursorPagination):
+    page_size = 33
+    page_size_query_param = 'page_size'
+    ordering = ['-ts', 'sid']
+
+# --------------------
+# ViewSet Filters: Events
 
 class RainfallEventFilter(FilterSet):
     event_after = filters.DateFilter(field_name="start_dt", lookup_expr="gte")
@@ -136,6 +184,7 @@ class RainfallEventFilter(FilterSet):
     class Meta:
         model = RainfallEvent
         fields = ['event_label', 'start_dt', 'end_dt']
+
 
 class RainfallEventViewset(viewsets.ReadOnlyModelViewSet):
     """
@@ -149,54 +198,104 @@ class RainfallEventViewset(viewsets.ReadOnlyModelViewSet):
     filter_backends = (DjangoFilterBackend,)
     filterset_class = RainfallEventFilter
 
+# --------------------
+# ViewSet Filters: Rainfall Records
 
-class GarrObservationViewset(viewsets.ReadOnlyModelViewSet):
+class RainfallRecordFilter(FilterSet):
+    start_dt = filters.DateFilter(field_name="ts", lookup_expr="gte")
+    end_dt = filters.DateFilter(field_name="ts", lookup_expr="lte")
+
+class GaugeRecordFilter(RainfallRecordFilter):
+    gauge = filters.TypedMultipleChoiceFilter(
+        field_name="sid",
+        choices=[(i.web_id, "{0}: {1}".format(i.web_id, i.name)) for i in Gauge.objects.all().order_by('web_id')]
+    )
+    class Meta:
+        model = GaugeRecord
+        fields = ['gauge', 'start_dt', 'end_dt']
+
+class RtrgRecordFilter(RainfallRecordFilter):
+    gauge = filters.TypedMultipleChoiceFilter(
+        field_name="sid",
+        choices=[(i.web_id, "{0}: {1}".format(i.web_id, i.name)) for i in Gauge.objects.all().order_by('web_id')]
+    )
+    class Meta:
+        model = RtrgRecord
+        fields = ['gauge', 'start_dt', 'end_dt']
+
+class RtrrRecordFilter(RainfallRecordFilter):
+    pixel = filters.TypedMultipleChoiceFilter(
+        field_name="sid",
+        choices=[(i.pixel_id, i.pixel_id) for i in Pixel.objects.all().order_by('pixel_id')]
+    )
+    class Meta:
+        model = RtrrRecord
+        fields = ['pixel', 'start_dt', 'end_dt']
+
+class GarrRecordFilter(RainfallRecordFilter):
+    pixel = filters.TypedMultipleChoiceFilter(
+        field_name="sid",
+        choices=[(i.pixel_id, i.pixel_id) for i in Pixel.objects.all().order_by('pixel_id')]
+    )
+    class Meta:
+        model = GarrRecord
+        fields = ['pixel', 'start_dt', 'end_dt']
+
+
+# --------------------
+# Default Rainfall Record Viewsets
+
+class RainfallRecordReadOnlyViewset(viewsets.ReadOnlyModelViewSet):
+    """parent class, provides shared properties for the default rainfall record model-based viewsets"""
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    lookup_field = 'timestamp'
+    filter_backends = (DjangoFilterBackend,)
+
+
+class GarrRecordViewset(RainfallRecordReadOnlyViewset):
     """
     Get calibrated, gauge-adjusted radar rainfall observations for 15-minute time intervals. Data created by Vieux Associates for 3 Rivers Wet Weather from available NEXRAD and local rain gauges.
     """    
-    queryset = GarrObservation.objects.all()
-    serializer_class  = GarrObservationSerializer
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
-    lookup_field = 'timestamp'
-    pagination_class = PixelResultsSetPagination
+    queryset = GarrRecord.objects.all()
+    serializer_class  = GarrRecordSerializer
+    filterset_class = GarrRecordFilter
+    pagination_class = PixelResultsSetPagination2
 
 
-class GaugeObservationViewset(viewsets.ReadOnlyModelViewSet):
+class GaugeRecordViewset(RainfallRecordReadOnlyViewset):
     """
     Get QA/QC'd rainfall gauge observations for 15-minute time intervals. Data captured by 3 Rivers Wet Weather and ALCOSAN.
     """
-    queryset = GaugeObservation.objects.all()
-    serializer_class  = GaugeObservationSerializer
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
-    lookup_field='timestamp'
-    pagination_class = GaugeResultsSetPagination
+    queryset = GaugeRecord.objects.all()
+    serializer_class  = GaugeRecordSerializer
+    filterset_class = GaugeRecordFilter
+    pagination_class = GaugeResultsSetPagination2
 
-class RtrrObservationViewset(viewsets.ReadOnlyModelViewSet):
+
+class RtrrRecordViewset(RainfallRecordReadOnlyViewset):
     """
     Get real-time radar rainfall observations for 15-minute time intervals. Data captured by Vieux Associates from NEXRAD radar in Moon Township, PA for 3 Rivers Wet Weather. Please note that this data is provisional.
-    """  
-    queryset = RtrrObservation.objects.all()
-    serializer_class  = RtrrObservationSerializer
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
-    lookup_field='timestamp'
-    pagination_class = PixelResultsSetPagination
+    """
+    queryset = RtrrRecord.objects.all()
+    serializer_class  = RtrrRecordSerializer
+    filterset_class = RtrrRecordFilter
+    pagination_class = PixelResultsSetPagination2
 
-class RtrgbservationViewset(viewsets.ReadOnlyModelViewSet):
+
+class RtrgRecordViewset(RainfallRecordReadOnlyViewset):
     """
     Get real-time rainfall gauge observations for 15-minute time intervals. Data captured by 3 Rivers Wet Weather and Datawise. Please note that this data is provisional and that observations may be missing due to technical/transmission difficulties.
     """
-    queryset = RtrgObservation.objects.all()
-    serializer_class  = RtrgObservationSerializer
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
-    lookup_field='timestamp'
-    pagination_class = GaugeResultsSetPagination
+    queryset = RtrgRecord.objects.all()
+    serializer_class  = RtrgRecordSerializer
+    filterset_class = RtrgRecordFilter
+    pagination_class = GaugeResultsSetPagination2
+    
 
 # -------------------------------------------------------------------
 # HELPER VIEWS
 # These provide helpers for specific use cases
 
-# @api_view(['GET'])
-# def get_latest_observation_timestamps_summary(request):
 class LatestObservationTimestampsSummary(viewsets.ReadOnlyModelViewSet):
     
     def list(self, request, format=None):
@@ -209,7 +308,7 @@ class LatestObservationTimestampsSummary(viewsets.ReadOnlyModelViewSet):
         }
 
         summary = {
-            k: v.timestamp.astimezone(TZI).isoformat() if v is not None else None
+            k: v.ts.astimezone(TZI).isoformat() if v is not None else None
             for k, v in 
             raw_summary.items()
         }

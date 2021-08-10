@@ -424,6 +424,10 @@ def query_pgdb(postgres_table_model, sensor_ids, all_datetimes, timezone=TZ):
 
     # build the query using the provided params
     query, query_params = _build_query(tablename, all_datetimes, sensor_ids)
+
+    # FOR THE NEW DB:
+    # r = [i for i in  Rtrg.objects.filter(ts__gte="2021-07-07", ts__lt="2021-07-08", sid__in=["17"]).values('sid','ts','val')]
+
     #pdb.set_trace()
     # query the db
     queryset = _query_pgdb(postgres_table_model, query, query_params)
@@ -762,3 +766,50 @@ def format_results(results, f, geodata_model):
 
     else:
         return results
+
+
+def query_one_sensor_rollup_monthly(postgres_table_model, all_datetimes, sensor_id):
+    """Builds the rainfall SQL for a single sensor and datetime range. Note that all
+    kwargs are derived from trusted internal sources (none are direct from the end-user).
+    """
+
+    tablename = postgres_table_model.objects.model._meta.db_table
+    
+    query = """
+        SELECT
+            sq1.id,
+            date_trunc('month', sq1.all_ts) as ts,
+            sum(val) as val
+        from (
+            select 
+                '{0}'::text as id,
+                rr.timestamp as all_ts,
+                (rr.data->'{0}'->0)::float as val
+            from {1} rr
+            where (timestamp >= %s and timestamp <= %s) order by timestamp
+        ) sq1
+        group by sq1.id, ts
+        order by ts;
+    """.format(
+        sensor_id,
+        tablename
+    )
+
+    query_params = [
+        all_datetimes[0],
+        all_datetimes[-1],
+    ]
+
+    queryset = postgres_table_model.objects.raw(query, query_params).iterator()
+
+    rows = [
+        dict(
+            ts=r.ts.astimezone(TZ).isoformat(),
+            id=str(r.id),
+            val=r.val,
+            src=""
+        )
+        for r in queryset
+    ]
+
+    return rows

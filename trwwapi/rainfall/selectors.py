@@ -40,6 +40,10 @@ from .models import (
     GaugeObservation,
     RtrgObservation,
     RtrrObservation,
+    RtrgRecord,
+    GarrRecord,
+    GaugeRecord,    
+    RtrrRecord,
     MODELNAME_TO_GEOMODEL_LOOKUP
 )
 from .serializers import (
@@ -373,7 +377,10 @@ def handle_request_for(rainfall_model, request, *args, **kwargs):
 # ------------------------------------------------------------------------------
 # SELECTORS
 
-def _get_latest(model_class, timestamp_field="timestamp"):
+# -----------------------
+# get latest observation timestamps
+
+def _get_latest(model_class, timestamp_field="ts"):
     """gets the latest record from the model, by default using the 
     timestamp_field arg. Returns a single instance of model_class.
     """
@@ -382,27 +389,27 @@ def _get_latest(model_class, timestamp_field="timestamp"):
     
     r = None
     try:
-        if 'timestamp' in fields:
+        if 'ts' in fields:
             r = model_class.objects.latest(timestamp_field)
         else:
             r = model_class.objects\
-                .annotate(timestamp=models.ExpressionWrapper(models.F(timestamp_field), output_field=models.DateTimeField()))\
+                .annotate(ts=models.ExpressionWrapper(models.F(timestamp_field), output_field=models.DateTimeField()))\
                 .latest(timestamp_field)
         return r
     except (model_class.DoesNotExist, AttributeError):
         return None
 
 def get_latest_garrobservation():
-    return _get_latest(GarrObservation)
+    return _get_latest(GarrRecord)
 
 def get_latest_gaugeobservation():
-    return _get_latest(GaugeObservation)
+    return _get_latest(GaugeRecord)
 
 def get_latest_rtrrobservation():
-    return _get_latest(RtrrObservation)
+    return _get_latest(RtrrRecord)
 
 def get_latest_rtrgobservation():
-    return _get_latest(RtrgObservation)
+    return _get_latest(RtrgRecord)
 
 def get_latest_rainfallevent():
     return _get_latest(RainfallEvent, 'start_dt')
@@ -417,3 +424,8 @@ def get_rainfall_total_for(postgres_table_model, sensor_ids, back_to: timedelta)
         return round(sum(x['val'] for x in rows if x['val']), 1)
     else:
         return None
+# -----------------------
+# get records using a timestamp delta
+
+def _get_ts_by_delta(model_class, timedelta_kwargs):
+    return model_class.objects.filter(ts__gte=(datetime.now()-timedelta(**timedelta_kwargs)))
