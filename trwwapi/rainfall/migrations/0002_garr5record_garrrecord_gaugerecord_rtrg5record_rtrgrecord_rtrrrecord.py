@@ -15,13 +15,14 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('ts', models.DateTimeField(db_index=True, verbose_name='Timestamp')),
-                ('sid', models.IntegerField(db_index=True, verbose_name='Sensor ID')),
+                ('sid', models.IntegerField(db_index=True, max_length=12, verbose_name='Sensor ID')),
                 ('val', models.FloatField(verbose_name='Rainfall (inches)')),
                 ('src', models.CharField(max_length=4, verbose_name='Source')),
             ],
             options={
                 'ordering': ['-ts', 'sid'],
                 'abstract': False,
+                'managed': False
             },
         ),
         migrations.CreateModel(
@@ -29,13 +30,14 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('ts', models.DateTimeField(db_index=True, verbose_name='Timestamp')),
-                ('sid', models.IntegerField(db_index=True, verbose_name='Sensor ID')),
+                ('sid', models.IntegerField(db_index=True, max_length=12, verbose_name='Sensor ID')),
                 ('val', models.FloatField(verbose_name='Rainfall (inches)')),
                 ('src', models.CharField(max_length=4, verbose_name='Source')),
             ],
             options={
                 'ordering': ['-ts', 'sid'],
                 'abstract': False,
+                'managed': False
             },
         ),
         migrations.CreateModel(
@@ -43,13 +45,14 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('ts', models.DateTimeField(db_index=True, verbose_name='Timestamp')),
-                ('sid', models.IntegerField(db_index=True, verbose_name='Sensor ID')),
+                ('sid', models.IntegerField(db_index=True, max_length=12, verbose_name='Sensor ID')),
                 ('val', models.FloatField(verbose_name='Rainfall (inches)')),
                 ('src', models.CharField(max_length=4, verbose_name='Source')),
             ],
             options={
                 'ordering': ['-ts', 'sid'],
                 'abstract': False,
+                'managed': False
             },
         ),
         migrations.CreateModel(
@@ -57,13 +60,14 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('ts', models.DateTimeField(db_index=True, verbose_name='Timestamp')),
-                ('sid', models.IntegerField(db_index=True, verbose_name='Sensor ID')),
+                ('sid', models.IntegerField(db_index=True, max_length=12, verbose_name='Sensor ID')),
                 ('val', models.FloatField(verbose_name='Rainfall (inches)')),
                 ('src', models.CharField(max_length=4, verbose_name='Source')),
             ],
             options={
                 'ordering': ['-ts', 'sid'],
                 'abstract': False,
+                'managed': False
             },
         ),
         migrations.CreateModel(
@@ -71,13 +75,14 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('ts', models.DateTimeField(db_index=True, verbose_name='Timestamp')),
-                ('sid', models.IntegerField(db_index=True, verbose_name='Sensor ID')),
+                ('sid', models.IntegerField(db_index=True, max_length=12, verbose_name='Sensor ID')),
                 ('val', models.FloatField(verbose_name='Rainfall (inches)')),
                 ('src', models.CharField(max_length=4, verbose_name='Source')),
             ],
             options={
                 'ordering': ['-ts', 'sid'],
                 'abstract': False,
+                'managed': False
             },
         ),
         migrations.CreateModel(
@@ -85,13 +90,14 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('ts', models.DateTimeField(db_index=True, verbose_name='Timestamp')),
-                ('sid', models.IntegerField(db_index=True, verbose_name='Sensor ID')),
+                ('sid', models.IntegerField(db_index=True, max_length=12, verbose_name='Sensor ID')),
                 ('val', models.FloatField(verbose_name='Rainfall (inches)')),
                 ('src', models.CharField(max_length=4, verbose_name='Source')),
             ],
             options={
                 'ordering': ['-ts', 'sid'],
                 'abstract': False,
+                'managed': False
             },
         ),
     ]
