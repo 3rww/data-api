@@ -1,27 +1,27 @@
 from django.apps import apps
 
-class ModelDatabaseRouter:
-    """Allows each model to set its own destiny"""
+# class ModelDatabaseRouter:
+#     """Allows each model to set its own destiny"""
 
-    def db_for_read(self, model, **hints):
-        # Specify target database with field in_db in model's Meta class
-        return getattr(model._meta, 'in_db', None)
+#     def db_for_read(self, model, **hints):
+#         # Specify target database with field in_db in model's Meta class
+#         return getattr(model._meta, 'in_db', None)
 
-    def db_for_write(self, model, **hints):
-        # Specify target database with field in_db in model's Meta class
-        return getattr(model._meta, 'in_db', None)
+#     def db_for_write(self, model, **hints):
+#         # Specify target database with field in_db in model's Meta class
+#         return getattr(model._meta, 'in_db', None)
 
-    def allow_migrate(self, db, app_label, model_name=None, **hints):
-        # if in_db is specified and matches db, use that for migration,
-        # otherwise use default
-        # print(db, app_label, model_name)
-        if model_name is None:
-            return None
-        model = apps.get_model(app_label, model_name)
-        db_name = getattr(model._meta, 'in_db', None)
-        if db_name is not None:
-            return db_name == db
-        return None
+#     def allow_migrate(self, db, app_label, model_name=None, **hints):
+#         # if in_db is specified and matches db, use that for migration,
+#         # otherwise use default
+#         # print(db, app_label, model_name)
+#         if model_name is None:
+#             return None
+#         model = apps.get_model(app_label, model_name)
+#         db_name = getattr(model._meta, 'in_db', None)
+#         if db_name is not None:
+#             return db_name == db
+#         return None
 
 class RainfallDbRouter:
 

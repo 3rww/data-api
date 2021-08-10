@@ -89,7 +89,7 @@ class RainfallRecordMixin(PandasModelMixin):
         constraints = [
             UniqueConstraint(fields=['ts', 'sid'], name='%(class)s_uniq_record_constraint')
         ]
-        in_db = "rainfall_db"
+        #in_db = "rainfall_db"
         managed = False
     
 
