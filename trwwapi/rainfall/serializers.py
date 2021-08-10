@@ -92,25 +92,25 @@ class GaugeSerializer(GeoFeatureModelSerializer):
 class GarrRecordSerializer(serializers.ModelSerializer):
     class Meta:
         model = GarrRecord
-        fields = '__all__'
+        fields = ('ts', 'sid', 'val', 'src')
 
 
 class GaugeRecordSerializer(serializers.ModelSerializer):
     class Meta:
         model = GaugeRecord
-        fields = '__all__'
+        fields = ('ts', 'sid', 'val')
 
 
 class RtrgRecordSerializer(serializers.ModelSerializer):
     class Meta:
         model = RtrgRecord
-        fields = '__all__'
+        fields = ('ts', 'sid', 'val')
 
 
 class RtrrRecordSerializer(serializers.ModelSerializer):
     class Meta:
         model = RtrrRecord
-        fields = '__all__'
+        fields = ('ts', 'sid', 'val')
 
 
 class RequestSchema(Schema):

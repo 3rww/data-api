@@ -40,6 +40,10 @@ from .models import (
     GaugeObservation,
     RtrgObservation,
     RtrrObservation,
+    RtrgRecord,
+    GarrRecord,
+    GaugeRecord,    
+    RtrrRecord,
     MODELNAME_TO_GEOMODEL_LOOKUP
 )
 from .serializers import (
@@ -373,7 +377,7 @@ def handle_request_for(rainfall_model, request, *args, **kwargs):
 # ------------------------------------------------------------------------------
 # SELECTORS
 
-def _get_latest(model_class, timestamp_field="timestamp"):
+def _get_latest(model_class, timestamp_field="ts"):
     """gets the latest record from the model, by default using the 
     timestamp_field arg. Returns a single instance of model_class.
     """
@@ -382,11 +386,11 @@ def _get_latest(model_class, timestamp_field="timestamp"):
     
     r = None
     try:
-        if 'timestamp' in fields:
+        if 'ts' in fields:
             r = model_class.objects.latest(timestamp_field)
         else:
             r = model_class.objects\
-                .annotate(timestamp=models.ExpressionWrapper(models.F(timestamp_field), output_field=models.DateTimeField()))\
+                .annotate(ts=models.ExpressionWrapper(models.F(timestamp_field), output_field=models.DateTimeField()))\
                 .latest(timestamp_field)
         return r
     except (model_class.DoesNotExist, AttributeError):
@@ -394,16 +398,16 @@ def _get_latest(model_class, timestamp_field="timestamp"):
 
 
 def get_latest_garrobservation():
-    return _get_latest(GarrObservation)
+    return _get_latest(GarrRecord)
 
 def get_latest_gaugeobservation():
-    return _get_latest(GaugeObservation)
+    return _get_latest(GaugeRecord)
 
 def get_latest_rtrrobservation():
-    return _get_latest(RtrrObservation)
+    return _get_latest(RtrrRecord)
 
 def get_latest_rtrgobservation():
-    return _get_latest(RtrgObservation)
+    return _get_latest(RtrgRecord)
 
 def get_latest_rainfallevent():
     return _get_latest(RainfallEvent, 'start_dt')
