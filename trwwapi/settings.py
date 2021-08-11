@@ -133,6 +133,8 @@ DATABASE_ROUTERS = (
     'trwwapi.routers.DefaultRouter'
 )
 
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
 # caching
 CACHES = {
     'default': {

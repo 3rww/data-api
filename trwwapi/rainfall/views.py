@@ -92,7 +92,7 @@ class RainfallGaugeApiView(GenericAPIView):
     #     return handle_request_for(GaugeObservation, request, *args, **kwargs)
 
     def post(self, request, *args, **kwargs):
-        return handle_request_for(GaugeObservation, request, *args, **kwargs)
+        return handle_request_for(GaugeRecord, request, *args, **kwargs)
 
 
 class RainfallGarrApiView(GenericAPIView):
@@ -103,7 +103,7 @@ class RainfallGarrApiView(GenericAPIView):
     #     return handle_request_for(GarrObservation, request, *args, **kwargs)
 
     def post(self, request, *args, **kwargs):
-        return handle_request_for(GarrObservation, request, *args, **kwargs)
+        return handle_request_for(GarrRecord, request, *args, **kwargs)
 
 
 class RainfallRtrrApiView(GenericAPIView):
@@ -114,7 +114,7 @@ class RainfallRtrrApiView(GenericAPIView):
     #     return handle_request_for(RtrrObservation, request, *args, **kwargs)
 
     def post(self, request, *args, **kwargs):
-        return handle_request_for(RtrrObservation, request, *args, **kwargs)
+        return handle_request_for(RtrrRecord, request, *args, **kwargs)
 
 
 class RainfallRtrgApiView(GenericAPIView):
@@ -125,7 +125,7 @@ class RainfallRtrgApiView(GenericAPIView):
     #     return handle_request_for(RtrgObservation, request, *args, **kwargs)
 
     def post(self, request, *args, **kwargs):
-        return handle_request_for(RtrgObservation, request, *args, **kwargs)
+        return handle_request_for(RtrgRecord, request, *args, **kwargs)
 
 
 # -------------------------------------------------------------------

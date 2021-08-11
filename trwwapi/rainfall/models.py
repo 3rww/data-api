@@ -196,8 +196,8 @@ class Gauge(PandasModelMixin):
 # for an observation model, since we don't enforce a relationship between the 
 # observation models and sensor layer models
 MODELNAME_TO_GEOMODEL_LOOKUP = {
-    GarrObservation._meta.object_name: Pixel,
-    RtrrObservation._meta.object_name: Pixel,
-    GaugeObservation._meta.object_name: Gauge,
-    RtrgObservation._meta.object_name: Gauge
+    GarrRecord._meta.object_name: Pixel,
+    RtrrRecord._meta.object_name: Pixel,
+    GaugeRecord._meta.object_name: Gauge,
+    RtrgRecord._meta.object_name: Gauge,
 }

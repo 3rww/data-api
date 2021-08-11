@@ -45,6 +45,35 @@ class RainfallQueryResultSerializer(serializers.Serializer):
     #     ret['ts'] = parse(ret['ts']).astimezone(TZI).isoformat()
     #     return ret
 
+
+
+# ------------------------
+# Reference Models
+
+class RainfallEventSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = RainfallEvent
+        fields = ("start_dt", "end_dt", "report_label", "event_label", "duration")
+
+
+class PixelSerializer(GeoFeatureModelSerializer):
+    class Meta:
+        model = Pixel
+        geo_field = "geom"
+        fields = '__all__'
+
+
+class GaugeSerializer(GeoFeatureModelSerializer):
+    class Meta:
+        model = Gauge
+        geo_field = "geom"
+        fields = '__all__'
+
+
+
+# ------------------------
+# Observation Models
+
 class GarrObservationSerializer(serializers.ModelSerializer):
     class Meta:
         model = GarrObservation
@@ -69,24 +98,9 @@ class RtrgObservationSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
-class RainfallEventSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = RainfallEvent
-        fields = ("start_dt", "end_dt", "report_label", "event_label", "duration")
 
-
-class PixelSerializer(GeoFeatureModelSerializer): 
-    class Meta:
-        model = Pixel
-        geo_field = "geom"
-        fields = '__all__'
-
-
-class GaugeSerializer(GeoFeatureModelSerializer):
-    class Meta:
-        model = Gauge
-        geo_field = "geom"
-        fields = '__all__'
+# ------------------------
+# Record Models
 
 
 class GarrRecordSerializer(serializers.ModelSerializer):

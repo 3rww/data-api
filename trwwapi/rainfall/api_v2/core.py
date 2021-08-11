@@ -1,39 +1,38 @@
 """core logic supporting implementation of a legacy (Teragon) API, provided for backwards-compatible
 """
 
-from pathlib import PurePosixPath
-from datetime import datetime, timedelta
-from urllib.parse import parse_qs
+# from pathlib import PurePosixPath
+from datetime import timedelta
+# from urllib.parse import parse_qs
 from collections import OrderedDict
 import pdb
 
 from dateutil.parser import parse
-from dateutil import tz
 import petl as etl
 import pandas as pd
 import numpy as np
-from tenacity import retry, wait_random_exponential, stop_after_attempt, stop_after_delay
+# from tenacity import retry, wait_random_exponential, stop_after_attempt, stop_after_delay
 import geojson
 from codetiming import Timer
 
-from django.db.models import Q
+from django.db.models import Func, F, DateTimeField, ExpressionWrapper
 
 
-from .models import RequestSchema, RainfallObservation, TableGARR15, TableGauge15, TableRTRR15
+from .models import RequestSchema
 from .utils import datetime_range, dt_parser
-from ..models import RtrgObservation
+from ..models import RtrgRecord
 from ...common.config import (
 #from .config import (
-    DATA_DIR,
+    # DATA_DIR,
     TZ,
     TZI,
-    RAINGAUGE_RESOURCE_PATH,
-    PIXEL_RESOURCE_PATH,
-    RTRR_RESOURCE_PATH,
-    PIXEL_DELIMITER,
-    GAUGE_DELIMITER,
+    # RAINGAUGE_RESOURCE_PATH,
+    # PIXEL_RESOURCE_PATH,
+    # RTRR_RESOURCE_PATH,
+    # PIXEL_DELIMITER,
+    # GAUGE_DELIMITER,
     DELIMITER,
-    INTERVAL_15MIN,
+    # INTERVAL_15MIN,
     INTERVAL_HOURLY,
     INTERVAL_DAILY,
     INTERVAL_SUM,
@@ -49,78 +48,28 @@ from ...common.config import (
     MIN_INTERVAL
 )
 
-from ..serializers import RainfallQueryResultSerializer
+# from ..serializers import RainfallQueryResultSerializer
 
 
 # CONSTANTS ---------------------------------------------------------
 
-DDB_TABLE_LOOKUP = {
-    RAINGAUGE_RESOURCE_PATH: TableGauge15,
-    PIXEL_RESOURCE_PATH: TableGARR15,
-    RTRR_RESOURCE_PATH: TableRTRR15
-} # DEPRECATED
 
-REF_GEOJSON_LOOKUP = {
-    RAINGAUGE_RESOURCE_PATH: DATA_DIR / 'gauges.geojson',
-    PIXEL_RESOURCE_PATH: DATA_DIR / 'pixels.geojson',
-    RTRR_RESOURCE_PATH: DATA_DIR / 'pixels.geojson'
-} # DEPRECTATED
+# REF_GEOJSON_LOOKUP = {
+#     RAINGAUGE_RESOURCE_PATH: DATA_DIR / 'gauges.geojson',
+#     PIXEL_RESOURCE_PATH: DATA_DIR / 'pixels.geojson',
+#     RTRR_RESOURCE_PATH: DATA_DIR / 'pixels.geojson'
+# } # DEPRECTATED
 
-RAINFALL_BASE_MODEL_REF = RainfallObservation()
+# RAINFALL_BASE_MODEL_REF = RainfallObservation()
 
-# STATIC DATA REFERENCES --------------------------------------------
-# Create complete lists of pixel and gauge IDs, to use as default for 
-# request if not available
 
 # HELPERS -----------------------------------------------------------
 
-def parse_args_to_dict(body, list_delimiter=DELIMITER, replacement_delimiter=DELIMITER):
-    """DEPRECATED 
-    Use urllib query string parser to turn the body or querty string of the request into a
-    dictionary, after handling any potentially non-standard delimiters
-    """
-    cleaned_body = body.replace(list_delimiter, replacement_delimiter)
-    parsed_body = parse_qs(cleaned_body)
-    return {k: v[0] for k, v in parsed_body.items()}
+class IntervalSeconds(Func):
 
-def parse_apigw_event(resource, request_args):
-    """DEPRECATED
-    
-    parse the resource path and request args (which may be in body or query string) from the request into objects
-    
-    :param resource: path of the api resource; resource key in the event json
-    :type resource: str
-    :param body: body of request; body key in the event json
-    :type body: str
-    :return: body contents as a dictionary, associated table as a PynamoDB Table object
-    :rtype: (dict, PynamoDB.model)
-    """
+    function = 'INTERVAL'
+    template = "(%(expressions)s * %(function)s '1 seconds')"
 
-    args, table = None, None
-
-    # get the name of the resource from the resource path
-    # e.g., pixel, raingauge, realtime. Those constants stored in config.py
-    p = PurePosixPath(resource).name
-
-    # if the args are a dictionary (i.e., from the query string), use as-is
-    if isinstance(request_args, dict):
-        args = request_args
-    # parse the body string into a dictionary, handling any weirdly delimited args that might affect parsing
-    elif isinstance(request_args, str):
-        if p == RAINGAUGE_RESOURCE_PATH:
-            args = parse_args_to_dict(request_args, GAUGE_DELIMITER, DELIMITER)
-        elif p == PIXEL_RESOURCE_PATH:
-            args = parse_args_to_dict(request_args, PIXEL_DELIMITER, DELIMITER)
-    else:
-        return None, None, None
-    
-    # use the parsed name to get the model for the table that this 
-    # request is to be associated with
-    table = DDB_TABLE_LOOKUP[p]
-    geo = REF_GEOJSON_LOOKUP[p]
-    print("database table:", table.Meta.table_name)
-
-    return args, table, geo
 
 def parse_and_validate_args(raw_args,):
     """validate request args and parse using Marshmallow pre-processor schema.
@@ -263,158 +212,6 @@ def parse_datetime_args(start_dt, end_dt, interval=None, delta=15):
     # return dts
     return [start_dt, end_dt], interval_count
 
-@retry(stop=(stop_after_attempt(5) | stop_after_delay(60)), wait=wait_random_exponential(multiplier=2, max=30), reraise=True)
-def query_ddb_exact(pynamodb_table, sensor_ids, all_datetimes):
-    """DEPRECATED
-    query the *exact records* needed from the db
-    
-    :param pynamodb_table: [description]
-    :type pynamodb_table: [type]
-    :param id_string: [description]
-    :type id_string: [type]
-    :param all_datetimes: [description]
-    :type all_datetimes: [type]
-    :return: PETL table containing results
-    :rtype: petl table 
-    """
-    print("querying table", pynamodb_table.Meta.table_name)
-
-    # construct the batch-get query args by creating a list of
-    # all combinations of sensor ids with date/times
-    # (i.e., create the exact list of the primary keys in the table that we'll get)
-    item_keys = []
-    for i in sensor_ids: # parse_sensor_ids(id_string):
-        for each_dt in all_datetimes:
-            item_keys.append((i, each_dt))
-    #print(item_keys)
-    # batch-get records from DDB, and map resulting PynamoDB 
-    # objects to a list of dictionaries
-    records = []
-    for item in pynamodb_table.batch_get(item_keys):
-        records.append(item.attribute_values)
-    print("returned", len(records), "records")
-    return records
-
-# ------------------------------------------------------------------------------
-# POSTGRES QUERY FUNCTION
-
-def _build_query(tablename, all_datetimes, sensor_ids=None):
-    """builds the query using the provided params
-    """
-    
-    query = """
-        select 
-            q1.timestamp as ts,
-            (q1.data->>'key')::text as id,
-            (q1.data->'value'->>0)::float as val,
-            (q1.data->'value'->>1)::text as src 
-        from (
-            select 
-                id, 
-                timestamp, 
-                row_to_json(jsonb_each(data))::jsonb 
-            as data from {0} rg 
-        ) q1
-        where (timestamp >= %s and timestamp <= %s) order by timestamp
-    """.format(tablename)
-
-    # Note that the use of a raw SQL query above means we later on will use a 
-    # custom serializer instead of the model's built-in, default serializer    
-
-    # we need start and end dates/times
-    query_params = [
-        all_datetimes[0],
-        all_datetimes[-1],
-    ]
-
-    # if sensor ids are spec'd we wrap the query above with an additional
-    # where clause, and add the sensor ids a parameter
-    if sensor_ids:
-        query = "select * from ({0}) q2 where id in %s".format(query)
-        query_params.append(tuple(sensor_ids))
-    
-    return query, query_params
-
-@Timer(name="query_pgdb__query_pgdb", text="{name}: {:.4f}s")
-def _query_pgdb(postgres_table_model, query, query_params):
-    return postgres_table_model.objects.raw(query, query_params).iterator()
-
-@Timer(name="query_pgdb__postprocess_pg_response", text="{name}: {:.4f}s")
-def _postprocess_pg_response(postgres_table_model, queryset, timezone=TZ):
-    """This function is primarily concerned with transforming the timestamps
-    from the database to local time and ISO format.
-    """
-
-    # if len(queryset) > 0:
-        # read results into a dataframe:
-        # df = postgres_table_model.as_dataframe_using_drf_serializer(
-        #     queryset=queryset,
-        #     drf_serializer=RainfallQueryResultSerializer
-        # )
-
-    # the output will have timezone-aware timestamps in UTC; convert
-    # to local timezone in iso-format
-
-    # TODO: handle error "Can only use .dt accessor with datetimelike values".
-    # It's unclear why we would get anything else here.
-    # TODO: handle error "Cannot convert tz-naive timestamps, use tz_localize 
-    # to localize" (seems to only show up when df is empty)
-
-    # if len(df.index > 0):
-
-    #     df['ts'] = pd\
-    #         .to_datetime(df['ts'], errors='coerce')\
-    #         .dt\
-    #         .tz_convert(timezone)\
-    #         .apply(lambda v: v.isoformat())
-
-
-    #     # convert the dataframe to a list of dictionaries
-    #     rows = df.to_dict(orient='records')
-
-    #     return rows
-        
-    # else:
-    #     return []
-
-
-    # NOTE: Real-time gauge data is currently being stored with a timestamp that is 3-hours ahead of 
-    # the actual recorded time, due to an error in timezone representation with the data source.
-    # Here, we are subtracting 3-hours to fix that representation.
-    # TODO: remove this bit of code by fixing the rainfall pipeline for RTRG to convert the timezone 
-    # correctly, and back-fix all timestamps in the object store and database
-    # See https://github.com/3rww/rainfall/issues/17
-    # See https://github.com/3rww/rainfall-pipelines/issues/1    
-
-    if postgres_table_model == RtrgObservation:
-
-        rows = [
-            dict(
-                ts=(r.ts.astimezone(TZ)-timedelta(hours=3)).isoformat(),
-                id=str(r.id),
-                val=r.val,
-                src=r.src
-            )
-            for r in queryset
-        ]            
-
-    else:
-
-        rows = [
-            dict(
-                ts=r.ts.astimezone(TZ).isoformat(),
-                id=str(r.id),
-                val=r.val,
-                src=r.src
-            )
-            for r in queryset
-        ]
-
-    # pdb.set_trace()
-    # print(rows)
-
-    return rows        
-
 # @retry(stop=(stop_after_attempt(5) | stop_after_delay(60)), wait=wait_random_exponential(multiplier=2, max=30), reraise=True)
 @Timer(name="query_pgdb", text="{name}: {:.4f}s")
 def query_pgdb(postgres_table_model, sensor_ids, all_datetimes, timezone=TZ):
@@ -422,22 +219,53 @@ def query_pgdb(postgres_table_model, sensor_ids, all_datetimes, timezone=TZ):
     tablename = postgres_table_model.objects.model._meta.db_table
     print("querying: {0}".format(tablename))
 
-    # build the query using the provided params
-    query, query_params = _build_query(tablename, all_datetimes, sensor_ids)
+    #pdb.set_trace()
 
-    # FOR THE NEW DB:
-    # r = [i for i in  Rtrg.objects.filter(ts__gte="2021-07-07", ts__lt="2021-07-08", sid__in=["17"]).values('sid','ts','val')]
+    # NOTE: Real-time gauge data is currently being stored with a timestamp that is 3-hours ahead of 
+    # the actual recorded time, due to an error in timezone representation with the data source.
+    # Here, we are adding and subtracing 3-hours to fix that representation.
+    # So if you want a reading from 8 am, it will be in the database for 11, so we add 3 hours to the query parms
+    # Then on the way back out, we convert the stored 11 am value back to 8am by subtracting 3 hours.
+
+    # TODO: remove this if/else by fixing the rainfall pipeline for RTRG to convert the timezone 
+    # correctly, and back-fix all timestamps in the object store and database
+    # See https://github.com/3rww/rainfall/issues/17
+    # See https://github.com/3rww/rainfall-pipelines/issues/1    
+
+
+    if postgres_table_model == RtrgRecord:
+        queryset = postgres_table_model.objects\
+            .filter(
+                ts__gte=all_datetimes[0] + timedelta(hours=3), 
+                ts__lt=all_datetimes[-1] + timedelta(hours=3), 
+                sid__in=sensor_ids
+            )\
+            .annotate(
+                xts=ExpressionWrapper(
+                    F("ts") - IntervalSeconds(10800), # this offsets the returned time by 3 hours
+                    output_field=DateTimeField()
+                )
+            )\
+            .values("xts", "sid", "val", "src")
+            #.iterator()
+            
+    else:
+        queryset = postgres_table_model.objects\
+            .filter(
+                ts__gte=all_datetimes[0], 
+                ts__lt=all_datetimes[-1], 
+                sid__in=sensor_ids
+            )\
+            .annotate(xts=F("ts"))\
+            .values("xts", "sid", "val", "src")
+            #.iterator()
 
     #pdb.set_trace()
-    # query the db
-    queryset = _query_pgdb(postgres_table_model, query, query_params)
-    #pdb.set_trace()
-    # post-process the result
-    rows = _postprocess_pg_response(postgres_table_model, queryset, timezone)
-    # print(rows)
-    # pdb.set_trace()
-    return rows
 
+    return queryset
+
+# -------------------------------------
+# aggregation by date
 
 def _rollup_date(dts, interval=None):
     """format date/time string based on interval spec'd for summation
@@ -502,11 +330,10 @@ def _minmax(i):
 
     return "{0}/{1}".format(start_dt, end_dt)
 
-@Timer(name="aggregate_results_by_interval", text="{name}: {:.4f}s")
-def aggregate_results_by_interval(query_results, rollup):
-    """aggregate the values in the query results based on the rollup args
-
-    Aggregation is performed for:
+@Timer(name="datetime_xagg", text="{name}: {:.4f}s")
+def transform_and_aggregate_datetimes(query_results, rollup):
+    """transform datetime to the correct TZ; aggregate the values in the query results 
+    based on the datetime rollup args. Aggregation is performed for:
 
     * hourly or daily time intervals
     * total
@@ -518,7 +345,16 @@ def aggregate_results_by_interval(query_results, rollup):
     (e.g., the sensor has values for the first half hour but N/D for the second, and we are 
     doing an hourly rollup), then the values will stay there, but the source field will indicate
     both N/D and whatever the source was for the workable sensor values.
+
+    TODO: move this work over to the database query
+
     """
+    t1 = etl\
+        .fromdicts(query_results)\
+        .convert('xts', lambda v: v.astimezone(TZ).isoformat(), failonerror=True)
+        #.rename('xts', 'ts')
+    # print(t1)
+
     # print("rollup", rollup)
     if rollup in [INTERVAL_DAILY, INTERVAL_HOURLY]:
 
@@ -527,10 +363,10 @@ def aggregate_results_by_interval(query_results, rollup):
             src=('src', _listset) # create a list of all rainfall sources included in the rollup
         )
 
-        t = etl\
-            .fromdicts(query_results)\
+        t2 = etl\
             .convert(
-                'ts', 
+                t1,
+                'xts', 
                 lambda v: _rollup_date(v, rollup), # convert datetimes to their rolled-up value in iso-format
                 failonerror=True
             )\
@@ -540,7 +376,7 @@ def aggregate_results_by_interval(query_results, rollup):
                 failonerror=True
             )\
             .aggregate(
-                ('ts', 'id'), 
+                ('xts', 'sid'), 
                 petl_aggs # aggregate rainfall values (sum) and sources (list) for each timestamp+ID combo,
             )\
             .convert(
@@ -549,29 +385,26 @@ def aggregate_results_by_interval(query_results, rollup):
                 pass_row=True,
                 failonerror=True
             )\
-            .sort('id')
+            .sort('sid')\
+            .dicts()
             # .convert(
-            #     'ts', 
+            #     'xts', 
             #     lambda v: TZ.localize(parse(v)).isoformat(), # convert that datetime to iso format w/ timezone
             #     failonerror=True
             # )
-
-        # print(t)
-
-        return list(etl.dicts(t))
 
     elif rollup in [INTERVAL_SUM]:
 
         petl_aggs = OrderedDict(
             val=('val', _sumround), # sum the rainfall vales
             src=('src', _listset), # create a list of all rainfall sources included in the rollup
-            ts=('ts', _minmax) # create a iso datetime range string from the min and max datetimes found
+            ts=('xts', _minmax) # create a iso datetime range string from the min and max datetimes found
         )
 
-        t = etl\
-            .fromdicts(query_results)\
+        t2 = etl\
             .aggregate(
-                'id', 
+                t1,
+                'sid', 
                 petl_aggs # aggregate rainfall values (sum) and sources (list), and datetimes (str) for each ID,
             )\
             .convert(
@@ -579,17 +412,28 @@ def aggregate_results_by_interval(query_results, rollup):
                 lambda v, r: None if ('N/D' in r.src and v == 0) else v, # replace 0 values with no data if aggregated source says its N/D
                 pass_row=True
             )\
-            .sort('id')
-
-        return list(etl.dicts(t))
+            .sort('sid')\
             
     else:
-        return query_results
-        # ensure that all records have the same shape:
-        # return list(etl.dicts(etl.fromdicts(query_results)))
+        t2 = t1
+
+    # print(t2)
+
+    
+    # rename the timestamp and sensor id fields, 
+    # and convert to list of dicts
+    t3 = list(etl.rename(t2, {'xts':'ts', 'sid':'id'}).dicts())
+    # print(t3[0:10])
+    
+    return t3
+
+# -------------------------------------
+# zerofilling
 
 def apply_zerofill(transformed_results, zerofill, dts):
-    """applies zerofill, which is to say, if zerofill==False, determines
+    """ *DEPRECATED*: This is unused and will be replaced with a database query
+    
+    Applies zerofill, which is to say, if zerofill==False, determines
     if *all* sensors for a given time interval report zero, and removes all those
     records from the response. The result is table where any given time interval
     is guaranteed to have rainfall values > 0 for at least one sensor. 
@@ -598,21 +442,25 @@ def apply_zerofill(transformed_results, zerofill, dts):
     the way we're storing data and the PETL select method used for identifying 
     candidate records, this process might be pretty slow.
     """
+    return transformed_results
     
-    if zerofill:
-        return transformed_results
-    else:
-        tables = []
-        t = etl.fromdicts(transformed_results)
-        for dt in dts:
-            s = etl.select(t, lambda rec: rec.ts == dt and rec.val > 0)
-            tables.append(s)
+    # if zerofill:
+    #     return transformed_results
+    # else:
+    #     tables = []
+    #     t = etl.fromdicts(transformed_results)
+    #     for dt in dts:
+    #         s = etl.select(t, lambda rec: rec.ts == dt and rec.val > 0)
+    #         tables.append(s)
 
-        if tables:
-            return list(etl.stack(*tables).dicts())
-        else:
-            # return an empty table
-            return [{k: None for k in RAINFALL_BASE_MODEL_REF.get_attributes().keys()}]
+    #     if tables:
+    #         return list(etl.stack(*tables).dicts())
+    #     else:
+    #         # return an empty table
+    #         return [{k: None for k in RAINFALL_BASE_MODEL_REF.get_attributes().keys()}]
+
+# -------------------------------------
+# result output formatting
 
 def _format_as_geojson(results, geodata_model):
     """joins the results to the corresponding geojson via the Django model.
@@ -767,13 +615,13 @@ def format_results(results, f, geodata_model):
     else:
         return results
 
-
 def query_one_sensor_rollup_monthly(postgres_table_model, all_datetimes, sensor_id):
     """Builds the rainfall SQL for a single sensor and datetime range. Note that all
     kwargs are derived from trusted internal sources (none are direct from the end-user).
     """
 
     tablename = postgres_table_model.objects.model._meta.db_table
+    
     
     query = """
         SELECT

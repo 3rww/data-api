@@ -76,3 +76,4 @@ def is_same_time_of_same_day(dt0, dt1):
         dt0.date() == dt1.date(),
         dt0.time() == dt1.time()
     ])
+
