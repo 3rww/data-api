@@ -15,7 +15,7 @@ import petl as etl
 from codetiming import Timer
 from dateutil.relativedelta import relativedelta
 
-from ..rainfall.api_v2.core import query_one_sensor_rollup_monthly
+from ..rainfall.api_v2.core import query_one_sensor_rollup_by_dt
 from ..rainfall.models import (
     RtrrObservation, 
     Pixel
@@ -326,7 +326,7 @@ class RwPublicAnalysis(RwCore):
             end_dt = datetime.now().replace(day=1,hour=0,minute=0, second=0,microsecond=0)
             start_dt = end_dt + relativedelta(months=-6)
             # query the single sensor and get back a monthly rainfall totals
-            results = query_one_sensor_rollup_monthly(
+            results = query_one_sensor_rollup_by_dt(
                 RtrrObservation, 
                 [start_dt, end_dt], 
                 sensor_id

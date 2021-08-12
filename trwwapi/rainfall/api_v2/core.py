@@ -15,7 +15,8 @@ import numpy as np
 import geojson
 from codetiming import Timer
 
-from django.db.models import Func, F, DateTimeField, ExpressionWrapper
+from django.db.models import Func, F, ExpressionWrapper, DateTimeField, Sum
+from django.db.models.functions import Trunc
 
 
 from .models import RequestSchema
@@ -615,47 +616,23 @@ def format_results(results, f, geodata_model):
     else:
         return results
 
-def query_one_sensor_rollup_monthly(postgres_table_model, all_datetimes, sensor_id):
+def query_one_sensor_rollup_by_dt(postgres_table_model, all_datetimes, sensor_id, rollup_by="month", tz=TZ):
     """Builds the rainfall SQL for a single sensor and datetime range. Note that all
     kwargs are derived from trusted internal sources (none are direct from the end-user).
     """
 
-    tablename = postgres_table_model.objects.model._meta.db_table
+    queryset = query_pgdb(postgres_table_model, [sensor_id], all_datetimes)\
+        .annotate(rollup=Trunc('ts', rollup_by))\
+        .values('sid', 'rollup')\
+        .annotate(total=Sum('val'))\
+        .order_by('rollup')
     
-    
-    query = """
-        SELECT
-            sq1.id,
-            date_trunc('month', sq1.all_ts) as ts,
-            sum(val) as val
-        from (
-            select 
-                '{0}'::text as id,
-                rr.timestamp as all_ts,
-                (rr.data->'{0}'->0)::float as val
-            from {1} rr
-            where (timestamp >= %s and timestamp <= %s) order by timestamp
-        ) sq1
-        group by sq1.id, ts
-        order by ts;
-    """.format(
-        sensor_id,
-        tablename
-    )
-
-    query_params = [
-        all_datetimes[0],
-        all_datetimes[-1],
-    ]
-
-    queryset = postgres_table_model.objects.raw(query, query_params).iterator()
-
     rows = [
         dict(
-            ts=r.ts.astimezone(TZ).isoformat(),
-            id=str(r.id),
-            val=r.val,
-            src=""
+            ts=r['rollup'].astimezone(tz).isoformat(),
+            id=str(r['sid']),
+            val=r['total'],
+            src="total per {}".format(rollup_by)
         )
         for r in queryset
     ]

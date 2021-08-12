@@ -316,7 +316,7 @@ class LatestObservationTimestampsSummary(viewsets.ReadOnlyModelViewSet):
         return Response(summary)
 
 
-def _get_myrain_for(request, back_to: timedelta, back_to_text: str):
+def get_myrain_for(request, back_to: timedelta, back_to_text: str):
     text ="That didn't work."
 
     lat = request.GET.get('lat')
@@ -331,7 +331,7 @@ def _get_myrain_for(request, back_to: timedelta, back_to_text: str):
 
         if len(list(pixels)) > 0:
 
-            total = get_rainfall_total_for(RtrrObservation, [pixel.pixel_id for pixel in pixels], timedelta(days=2))
+            total = get_rainfall_total_for(RtrrRecord, [pixel.pixel_id for pixel in pixels], timedelta(days=2))
 
             if total:
                 text = """According to 3 Rivers Wet Weather, your location received approximately {0} inches of rainfall {1}.""".format(total, back_to_text)
@@ -347,11 +347,12 @@ def _get_myrain_for(request, back_to: timedelta, back_to_text: str):
 
     return render(request, 'speech.html', {"text": text})
 
+
 def get_myrain_24hours(request):
-    return _get_myrain_for(request, timedelta(days=1), "over the past 24 hours")
+    return get_myrain_for(request, timedelta(days=1), "over the past 24 hours")
     
 def get_myrain_48hours(request):
-    return _get_myrain_for(request, timedelta(days=2), "over the past 48 hours")
+    return get_myrain_for(request, timedelta(days=2), "over the past 48 hours")
 
 def get_myrain_pastweek(request):
-    return _get_myrain_for(request, timedelta(days=7), "over the past week")
+    return get_myrain_for(request, timedelta(days=7), "over the past week")
