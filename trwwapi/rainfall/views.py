@@ -155,7 +155,7 @@ class PixelResultsSetPagination(PageNumberPagination):
 class PixelResultsSetPagination2(CursorPagination):
     page_size = 50
     page_size_query_param = 'page_size'
-    ordering = ['-ts', 'sid']
+    ordering = ['ts']
     # django_paginator_class = NoCountPaginator
     # def get_paginated_response(self, data):
     #     return Response(OrderedDict([
@@ -170,9 +170,9 @@ class GaugeResultsSetPagination(PageNumberPagination):
     max_page_size = 10
 
 class GaugeResultsSetPagination2(CursorPagination):
-    page_size = 33
+    page_size = 50
     page_size_query_param = 'page_size'
-    ordering = ['-ts', 'sid']
+    ordering = ['ts']
 
 # --------------------
 # ViewSet Filters: Events
@@ -255,6 +255,8 @@ class RainfallRecordReadOnlyViewset(viewsets.ReadOnlyModelViewSet):
 class GarrRecordViewset(RainfallRecordReadOnlyViewset):
     """
     Get calibrated, gauge-adjusted radar rainfall observations for 15-minute time intervals. Data created by Vieux Associates for 3 Rivers Wet Weather from available NEXRAD and local rain gauges.
+
+    Note: use available time- and pixel-based filtering options to get useful subsets of this data.
     """    
     queryset = GarrRecord.objects.all()
     serializer_class  = GarrRecordSerializer
@@ -265,6 +267,8 @@ class GarrRecordViewset(RainfallRecordReadOnlyViewset):
 class GaugeRecordViewset(RainfallRecordReadOnlyViewset):
     """
     Get QA/QC'd rainfall gauge observations for 15-minute time intervals. Data captured by 3 Rivers Wet Weather and ALCOSAN.
+
+    Note: use available time- and gauge-based filtering options to get useful subsets of this data.
     """
     queryset = GaugeRecord.objects.all()
     serializer_class  = GaugeRecordSerializer
@@ -275,6 +279,8 @@ class GaugeRecordViewset(RainfallRecordReadOnlyViewset):
 class RtrrRecordViewset(RainfallRecordReadOnlyViewset):
     """
     Get real-time radar rainfall observations for 15-minute time intervals. Data captured by Vieux Associates from NEXRAD radar in Moon Township, PA for 3 Rivers Wet Weather. Please note that this data is provisional.
+
+    Note: use available time- and pixel-based filtering options to get useful subsets of this data.
     """
     queryset = RtrrRecord.objects.all()
     serializer_class  = RtrrRecordSerializer
@@ -285,6 +291,8 @@ class RtrrRecordViewset(RainfallRecordReadOnlyViewset):
 class RtrgRecordViewset(RainfallRecordReadOnlyViewset):
     """
     Get real-time rainfall gauge observations for 15-minute time intervals. Data captured by 3 Rivers Wet Weather and Datawise. Please note that this data is provisional and that observations may be missing due to technical/transmission difficulties.
+
+    Note: use available time- and gauge-based filtering options to get useful subsets of this data.
     """
     queryset = RtrgRecord.objects.all()
     serializer_class  = RtrgRecordSerializer
