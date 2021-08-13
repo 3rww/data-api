@@ -213,6 +213,8 @@ def parse_datetime_args(start_dt, end_dt, interval=None, delta=15):
     # return dts
     return [start_dt, end_dt], interval_count
 
+OUT_FIELDS = ["xts", "sid", "val", "src"]
+
 # @retry(stop=(stop_after_attempt(5) | stop_after_delay(60)), wait=wait_random_exponential(multiplier=2, max=30), reraise=True)
 @Timer(name="query_pgdb", text="{name}: {:.4f}s")
 def query_pgdb(postgres_table_model, sensor_ids, all_datetimes, timezone=TZ):
@@ -247,7 +249,7 @@ def query_pgdb(postgres_table_model, sensor_ids, all_datetimes, timezone=TZ):
                     output_field=DateTimeField()
                 )
             )\
-            .values("xts", "sid", "val", "src")
+            .values(*OUT_FIELDS)
             #.iterator()
             
     else:
@@ -258,7 +260,7 @@ def query_pgdb(postgres_table_model, sensor_ids, all_datetimes, timezone=TZ):
                 sid__in=sensor_ids
             )\
             .annotate(xts=F("ts"))\
-            .values("xts", "sid", "val", "src")
+            .values(*OUT_FIELDS)
             #.iterator()
 
     #pdb.set_trace()
@@ -399,7 +401,7 @@ def transform_and_aggregate_datetimes(query_results, rollup):
         petl_aggs = OrderedDict(
             val=('val', _sumround), # sum the rainfall vales
             src=('src', _listset), # create a list of all rainfall sources included in the rollup
-            ts=('xts', _minmax) # create a iso datetime range string from the min and max datetimes found
+            xts=('xts', _minmax) # create a iso datetime range string from the min and max datetimes found
         )
 
         t2 = etl\
@@ -419,6 +421,14 @@ def transform_and_aggregate_datetimes(query_results, rollup):
         t2 = t1
 
     # print(t2)
+    h = etl.header(t2)
+
+    print("t2 header:", list(etl.header(t2)))
+    rename_kw = {}
+    for h1, h0 in [('xts', 'ts'), ('sid', 'id')]:
+        if h1 in h:
+            rename_kw[h1] = h0
+
 
     
     # rename the timestamp and sensor id fields, 
@@ -596,16 +606,17 @@ def format_results(results, f, geodata_model):
             return results
 
     # GEOJSON format (GeoJSON Feature collection; results under 'data' key within properties)
-    elif f in F_GEOJSON:
-        results = _groupby(results, key='id', sortby='ts')
-        return _format_as_geojson(results, geodata_model)
+    # elif f in F_GEOJSON:
+    #     results = _groupby(results, key='id', sortby='ts')
+    #     return _format_as_geojson(results, geodata_model)
 
     # ARRAYS format (2D table)
     elif f in F_ARRAYS:
         # nested arrays
         t = etl.fromdicts(results)
-        h = list(etl.header(t))
-        return list(etl.data(t)).insert(0,h)
+        #h = list(etl.header(t))
+        #return list(etl.data(t)).insert(0,h)
+        return list(etl.data(t))
 
     elif f in F_CSV:
         return _format_teragon(results)
