@@ -13,6 +13,7 @@ import pandas as pd
 import numpy as np
 # from tenacity import retry, wait_random_exponential, stop_after_attempt, stop_after_delay
 import geojson
+from pytz import timezone as pytz_timezone
 from codetiming import Timer
 
 from django.db.models import Func, F, ExpressionWrapper, DateTimeField, Sum
@@ -234,13 +235,21 @@ def query_pgdb(postgres_table_model, sensor_ids, all_datetimes, timezone=TZ):
     # correctly, and back-fix all timestamps in the object store and database
     # See https://github.com/3rww/rainfall/issues/17
     # See https://github.com/3rww/rainfall-pipelines/issues/1    
-
+    
 
     if postgres_table_model == RtrgRecord:
+
+        # tz = pytz_timezone('UTC')
+
+        # print([dt.astimezone(tz) for dt in all_datetimes])
+
+        mod_dts = [dt + timedelta(hours=3) for dt in all_datetimes]
+        # print([dt.astimezone(tz) for dt in mod_dts])
+
         queryset = postgres_table_model.objects\
             .filter(
-                ts__gte=all_datetimes[0] + timedelta(hours=3), 
-                ts__lt=all_datetimes[-1] + timedelta(hours=3), 
+                ts__gte=mod_dts[0],
+                ts__lt=mod_dts[-1],
                 sid__in=sensor_ids
             )\
             .annotate(
@@ -264,6 +273,7 @@ def query_pgdb(postgres_table_model, sensor_ids, all_datetimes, timezone=TZ):
             #.iterator()
 
     #pdb.set_trace()
+    # print(queryset)
 
     return queryset
 

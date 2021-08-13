@@ -219,48 +219,48 @@ def get_rainfall_data(postgres_table_model, raw_args=None):
     # -------------------------------------------------------------------
     # post process the query results, if any
 
-    # if len(results) > 0:
+    if len(results) > 0:
             
-    # perform selects and/or aggregations based on zerofill and interval args
-    # print("aggregate_results_by_interval")
-    transformed_results = transform_and_aggregate_datetimes(results, args['rollup'])
-    #print("aggregated results\n", etl.fromdicts(aggregated_results))
-    # print("apply_zerofill")
-    # zerofilled_results = apply_zerofill(transformed_results, args['zerofill'], dts)
-    # transform the data to the desired format, if any
-    # print("format_results")
-    response_data = format_results(
-        transformed_results, 
-        args['f'],
-        MODELNAME_TO_GEOMODEL_LOOKUP[postgres_table_model._meta.object_name]
-    )
+        # perform selects and/or aggregations based on zerofill and interval args
+        # print("aggregate_results_by_interval")
+        transformed_results = transform_and_aggregate_datetimes(results, args['rollup'])
+        #print("aggregated results\n", etl.fromdicts(aggregated_results))
+        # print("apply_zerofill")
+        # zerofilled_results = apply_zerofill(transformed_results, args['zerofill'], dts)
+        # transform the data to the desired format, if any
+        # print("format_results")
+        response_data = format_results(
+            transformed_results, 
+            args['f'],
+            MODELNAME_TO_GEOMODEL_LOOKUP[postgres_table_model._meta.object_name]
+        )
 
-    # return the result
-    # print("completed, returning the results")
-    # pdb.set_trace()
+        # return the result
+        # print("completed, returning the results")
+        # pdb.set_trace()
 
-    # if the request was for a csv in the legacy teragon format, then we only return that
-    if args['f'] in F_CSV:
-        # print('returning legacy CSV format')
-        return Response(response_data, status=status.HTTP_200_OK, content_type="text/csv")
+        # if the request was for a csv in the legacy teragon format, then we only return that
+        if args['f'] in F_CSV:
+            # print('returning legacy CSV format')
+            return Response(response_data, status=status.HTTP_200_OK, content_type="text/csv")
+        else:
+            response = ResponseSchema(
+                status_code=status.HTTP_200_OK,
+                request_args=args,
+                response_data=response_data,
+                messages=messages.messages
+            )
+            #return Response(response.as_dict(), status=status.HTTP_200_OK)
+            #return response.as_dict()
+
     else:
+        # return the result
+        messages.add("No records returned for {0}".format(args['sensor_ids']))
         response = ResponseSchema(
             status_code=status.HTTP_200_OK,
             request_args=args,
-            response_data=response_data,
             messages=messages.messages
         )
-        #return Response(response.as_dict(), status=status.HTTP_200_OK)
-        #return response.as_dict()
-
-    # else:
-    #     # return the result
-    #     messages.add("No records returned.")
-    #     response = ResponseSchema(
-    #         status_code=status.HTTP_200_OK,
-    #         request_args=args,
-    #         messages=messages.messages
-    #     )
         
     
     # print("RESPONSE", response.as_dict())
