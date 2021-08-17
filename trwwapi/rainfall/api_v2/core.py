@@ -239,12 +239,14 @@ def query_pgdb(postgres_table_model, sensor_ids, all_datetimes, timezone=TZ):
 
     if postgres_table_model == RtrgRecord:
 
+        # print("queried datetimes:", all_datetimes)
         # tz = pytz_timezone('UTC')
 
         # print([dt.astimezone(tz) for dt in all_datetimes])
 
         mod_dts = [dt + timedelta(hours=3) for dt in all_datetimes]
         # print([dt.astimezone(tz) for dt in mod_dts])
+        # print("modified datetimes:", mod_dts)
 
         queryset = postgres_table_model.objects\
             .filter(
@@ -366,6 +368,7 @@ def transform_and_aggregate_datetimes(query_results, rollup):
         .fromdicts(query_results)\
         .convert('xts', lambda v: v.astimezone(TZ).isoformat(), failonerror=True)
         #.rename('xts', 'ts')
+    # print("t1")
     # print(t1)
 
     # print("rollup", rollup)
@@ -398,13 +401,13 @@ def transform_and_aggregate_datetimes(query_results, rollup):
                 pass_row=True,
                 failonerror=True
             )\
-            .sort('sid')\
-            .dicts()
+            .sort('sid')
             # .convert(
             #     'xts', 
             #     lambda v: TZ.localize(parse(v)).isoformat(), # convert that datetime to iso format w/ timezone
             #     failonerror=True
             # )
+        # print("t2 time rollup")
 
     elif rollup in [INTERVAL_SUM]:
 
@@ -426,27 +429,32 @@ def transform_and_aggregate_datetimes(query_results, rollup):
                 pass_row=True
             )\
             .sort('sid')\
-            
+
+        # print("t2 sum")
+
     else:
         t2 = t1
+    # print("t2 = t1")
 
     # print(t2)
-    h = etl.header(t2)
+    # h = etl.header(t2)
 
-    print("t2 header:", list(etl.header(t2)))
-    rename_kw = {}
-    for h1, h0 in [('xts', 'ts'), ('sid', 'id')]:
-        if h1 in h:
-            rename_kw[h1] = h0
-
-
-    
     # rename the timestamp and sensor id fields, 
-    # and convert to list of dicts
-    t3 = list(etl.rename(t2, {'xts':'ts', 'sid':'id'}).dicts())
-    # print(t3[0:10])
-    
-    return t3
+    # print("t2 header:", list(etl.header(t2)))
+    # rename_kw = {}
+    # for h1, h0 in [('xts', 'ts'), ('sid', 'id')]:
+    #     if h1 in h:
+    #         rename_kw[h1] = h0
+    # if len(rename_kw.items()) > 0:
+    #     {'xts':'ts', 'sid':'id'}
+    t3 = etl.rename(t2, {'xts':'ts', 'sid':'id'}, strict=False)
+    # else:
+    #     t3 = t2
+    # print("t3")
+    # print(t3)
+
+    # convert to list of dicts and return
+    return list(etl.dicts(t3))
 
 # -------------------------------------
 # zerofilling
@@ -567,6 +575,9 @@ def _groupby(results, key='ts', sortby='id'):
     key_by_these = sorted(list(set(map((lambda r: r[key]), results))))
 
     other_fields = [f for f in results[0].keys() if f != key]
+
+    # print("key_by_these", key_by_these)
+    # print("other_fields", other_fields)
 
     remapped = []
 
