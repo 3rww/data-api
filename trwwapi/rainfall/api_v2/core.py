@@ -237,42 +237,42 @@ def query_pgdb(postgres_table_model, sensor_ids, all_datetimes, timezone=TZ):
     # See https://github.com/3rww/rainfall-pipelines/issues/1    
     
 
-    if postgres_table_model == RtrgRecord:
+    # if postgres_table_model == RtrgRecord:
 
-        # print("queried datetimes:", all_datetimes)
-        # tz = pytz_timezone('UTC')
+    #     # print("queried datetimes:", all_datetimes)
+    #     # tz = pytz_timezone('UTC')
 
-        # print([dt.astimezone(tz) for dt in all_datetimes])
+    #     # print([dt.astimezone(tz) for dt in all_datetimes])
 
-        mod_dts = [dt + timedelta(hours=3) for dt in all_datetimes]
-        # print([dt.astimezone(tz) for dt in mod_dts])
-        # print("modified datetimes:", mod_dts)
+    #     mod_dts = [dt + timedelta(hours=3) for dt in all_datetimes]
+    #     # print([dt.astimezone(tz) for dt in mod_dts])
+    #     # print("modified datetimes:", mod_dts)
 
-        queryset = postgres_table_model.objects\
-            .filter(
-                ts__gte=mod_dts[0],
-                ts__lt=mod_dts[-1],
-                sid__in=sensor_ids
-            )\
-            .annotate(
-                xts=ExpressionWrapper(
-                    F("ts") - IntervalSeconds(10800), # this offsets the returned time by 3 hours
-                    output_field=DateTimeField()
-                )
-            )\
-            .values(*OUT_FIELDS)
-            #.iterator()
+    #     queryset = postgres_table_model.objects\
+    #         .filter(
+    #             ts__gte=mod_dts[0],
+    #             ts__lt=mod_dts[-1],
+    #             sid__in=sensor_ids
+    #         )\
+    #         .annotate(
+    #             xts=ExpressionWrapper(
+    #                 F("ts") - IntervalSeconds(10800), # this offsets the returned time by 3 hours
+    #                 output_field=DateTimeField()
+    #             )
+    #         )\
+    #         .values(*OUT_FIELDS)
+    #         #.iterator()
             
-    else:
-        queryset = postgres_table_model.objects\
-            .filter(
-                ts__gte=all_datetimes[0], 
-                ts__lt=all_datetimes[-1], 
-                sid__in=sensor_ids
-            )\
-            .annotate(xts=F("ts"))\
-            .values(*OUT_FIELDS)
-            #.iterator()
+    # else:
+    queryset = postgres_table_model.objects\
+        .filter(
+            ts__gte=all_datetimes[0], 
+            ts__lt=all_datetimes[-1], 
+            sid__in=sensor_ids
+        )\
+        .annotate(xts=F("ts"))\
+        .values(*OUT_FIELDS)
+        #.iterator()
 
     #pdb.set_trace()
     # print(queryset)
