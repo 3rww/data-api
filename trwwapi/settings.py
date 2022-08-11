@@ -114,7 +114,15 @@ DATABASES = {
         'PASSWORD': os.getenv('DB_PASSWORD'),
         'HOST': os.getenv('DB_HOST'),
         'PORT': os.getenv('DB_PORT')
-    }
+    },
+    'rainfall_db': {
+        'ENGINE': 'django.contrib.gis.db.backends.postgis',
+        'NAME': os.getenv('RAINFALL_DB_NAME'),
+        'USER': os.getenv('RAINFALL_DB_USER'),
+        'PASSWORD': os.getenv('RAINFALL_DB_PASSWORD'),
+        'HOST': os.getenv('RAINFALL_DB_HOST'),
+        'PORT': os.getenv('RAINFALL_DB_PORT')
+    }    
 }
 
 # use the connection string in DATABASE_URL if found in environment

@@ -69,6 +69,7 @@ class RtrgObservation(RainfallObservationMeta):
 # class RainfallObservationsJSON():
 # pass
 
+
 # --------------------------------------------------------------
 # Rainfall Record Models
 # Each record is a single observation per timestamp per sensor; tables are long but not wide.
@@ -160,14 +161,8 @@ class RainfallEvent(PandasModelMixin, TimestampedMixin):
         return self.event_label
 
 
-
-
-# TODO: create a class for managing and validating the contents of 
-# the RainfallObservationMeta data and metadata fields
-# @dataclass
-# class RainfallObservationsJSON():
-# pass
-
+# --------------------------------------------------------------
+# Rainfall Sensor Geography
 
 class Pixel(PandasModelMixin):
     pixel_id = models.CharField(max_length=12)

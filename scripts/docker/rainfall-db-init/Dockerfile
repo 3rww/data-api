@@ -1,4 +1,4 @@
-FROM python:3.8
+FROM python:3.10
 
 RUN apt-get update && \
     apt-get -y autoremove && \
@@ -21,4 +21,4 @@ RUN pip install -r requirements.txt
 
 COPY . /code/
 
-CMD [ "./docker/db-init/wait-for-postgres.sh", "db", "./docker/db-init/startup.sh" ]
+CMD [ "./scripts/docker/wait-for-postgres.sh", "rainfall_db", "./scripts/docker/rainfall-db-init/startup.sh" ]

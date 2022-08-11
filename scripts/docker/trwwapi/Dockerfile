@@ -1,4 +1,4 @@
-FROM python:3.8
+FROM python:3.10
 
 RUN apt-get update
 RUN apt-get -y autoremove && apt-get install -y \
@@ -24,4 +24,4 @@ RUN pip install -r /code/requirements.txt
 
 COPY . /code/
 
-CMD [ "./docker/app/startup.sh" ]
+CMD [ "./scripts/docker/trwwapi/startup.sh" ]

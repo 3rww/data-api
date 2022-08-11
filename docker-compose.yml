@@ -3,42 +3,42 @@ services:
     db:
         image: quay.io/azavea/postgis:3-postgres12.2-slim
         ports: 
-            - "5432:5432"
+            - "8765:5432"
         restart: always
         volumes:
             - /var/lib/postgresql/data/
-        env_file: .docker.env
+        env_file: scripts/docker/.env
     rainfall_db:
         image: quay.io/azavea/postgis:3-postgres12.2-slim
         ports: 
-            - "5435:5432"
+            - "8766:5432"
         restart: always
         volumes:
             - /var/lib/postgresql/data/
-        env_file: .docker.env
-    # db-init:
-    #     build:
-    #         context: .
-    #         dockerfile: docker/db-init/Dockerfile
-    #     depends_on:
-    #         - db
-    #     env_file: .docker.env
-    # rainfall-db-init:
-    #     build:
-    #         context: .
-    #         dockerfile: docker/rainfall-db-init/Dockerfile
-    #     depends_on:
-    #         - rainfall_db
-    #     env_file: .docker.env
+        env_file: scripts/docker/.env
+    db-init:
+        build:
+            context: .
+            dockerfile: scripts/docker/db-init/Dockerfile
+        depends_on:
+            - db
+        env_file: scripts/docker/.env
+    rainfall-db-init:
+        build:
+            context: .
+            dockerfile: scripts/docker/rainfall-db-init/Dockerfile
+        depends_on:
+            - rainfall_db
+        env_file: scripts/docker/.env
     redis:
         image: redis:alpine
         ports:
             - "6379:6379"
-        env_file: .docker.env             
+        env_file: scripts/docker/.env
     app:
         build: 
             context: .
-            dockerfile: docker/trwwapi/Dockerfile
+            dockerfile: scripts/docker/trwwapi/Dockerfile
         command: python3 manage.py runserver 0.0.0.0:7000
         depends_on:
             - db
@@ -48,11 +48,11 @@ services:
             - "7000:7000"
         volumes:
           - .:/code
-        env_file: .docker.env
+        env_file: scripts/docker/.env
     worker:
         build:
             context: .
-            dockerfile: docker/trwwapi/Dockerfile
+            dockerfile: scripts/docker/trwwapi/Dockerfile
         command: python3 manage.py rqworker default
         depends_on:
             - app        
@@ -60,4 +60,4 @@ services:
             DEBUG: 1
         volumes:
             - .:/code
-        env_file: .docker.env
+        env_file: scripts/docker/.env
