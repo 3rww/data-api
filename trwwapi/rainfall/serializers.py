@@ -26,7 +26,6 @@ from ..common.config import (
 from .api_v2.utils import datetime_encoder, dt_parser
 
 from .models import (
-    GarrObservation, GaugeObservation, RtrrObservation, RtrgObservation, 
     RainfallEvent, Pixel, Gauge,
     GarrRecord, GaugeRecord, RtrrRecord, RtrgRecord
 )
@@ -68,35 +67,6 @@ class GaugeSerializer(GeoFeatureModelSerializer):
         model = Gauge
         geo_field = "geom"
         fields = '__all__'
-
-
-
-# ------------------------
-# Observation Models
-
-class GarrObservationSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = GarrObservation
-        fields = '__all__'
-
-
-class GaugeObservationSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = GaugeObservation
-        fields = '__all__'
-
-
-class RtrrObservationSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = RtrrObservation
-        fields = '__all__'
-
-
-class RtrgObservationSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = RtrgObservation
-        fields = '__all__'
-
 
 
 # ------------------------

@@ -35,11 +35,7 @@ from ..common.config import (
     MAX_RECORDS
 )
 from .models import (
-    RainfallEvent, 
-    GarrObservation,
-    GaugeObservation,
-    RtrgObservation,
-    RtrrObservation,
+    RainfallEvent,
     RtrgRecord,
     GarrRecord,
     GaugeRecord,    

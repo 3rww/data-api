@@ -6,69 +6,6 @@ from django.db.models.constraints import UniqueConstraint
 from ..common.mixins import PandasModelMixin, TimestampedMixin
 
 
-class RainfallObservationMeta(PandasModelMixin):
-    """Base abstract model for all rainfall observations ORM models.
-    Each record is a point in time. Observations by sensor are stored in JSON 
-    'data' field, where keys are the sensor ids, and values are an array; 
-    the first item in the array is the rainfall amount, the second is any 
-    metadata about the recording. 
-    
-    An single record as a Python dictionary or JSON object then looks like this:
-
-        {
-            "timestamp": 2020-11-30T07:00:00+00:00
-            "data": {
-                "123456": [0.25, "G-4"],
-                "234561": [0.17, "G-4"],
-                ...
-            }
-        }
-
-    """
-
-    timestamp = models.DateTimeField(db_index=True)
-    data = JSONField()
-
-    class Meta:
-        abstract = True
-        ordering = ['-timestamp']
-        constraints = [
-            UniqueConstraint(fields=['timestamp'], name='%(class)s_uniq_timestamp_constraint')
-        ]
-
-    def __str__(self):
-        return str(self.timestamp)
-    
-
-class GaugeObservation(RainfallObservationMeta):
-    """Calibrated Rain Gauge data (historic)
-    """
-    pass
-
-
-class GarrObservation(RainfallObservationMeta):
-    """Gauge-Adjusted Radar Rainfall (historic)
-    """    
-    pass
-
-
-class RtrrObservation(RainfallObservationMeta):
-    """Raw Radar data (real-time)
-    """        
-    pass
-
-
-class RtrgObservation(RainfallObservationMeta):
-    """Raw Rain Gauge data (real-time)
-    """    
-    pass
-
-# TODO: create a class for managing and validating the contents of 
-# the RainfallObservationMeta data and metadata fields
-# @dataclass
-# class RainfallObservationsJSON():
-# pass
-
 
 # --------------------------------------------------------------
 # Rainfall Record Models
@@ -174,7 +111,7 @@ class Pixel(PandasModelMixin):
 
 class Gauge(PandasModelMixin):
 
-    web_id = models.IntegerField(null=True)
+    web_id = models.CharField(max_length=10, null=True)
     ext_id = models.CharField(max_length=10, null=True)
     nws_des = models.CharField(max_length=255, null=True)
     name = models.CharField(max_length=255)
@@ -182,6 +119,7 @@ class Gauge(PandasModelMixin):
     ant_elev = models.FloatField(null=True)
     elev_ft = models.FloatField(null=True)
     geom = models.PointField(null=True)
+    active = models.BooleanField(default=True, null=True)
 
     def __str__(self):
         return "{0} - {1}".format(self.web_id, self.name)
