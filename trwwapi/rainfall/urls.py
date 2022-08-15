@@ -9,11 +9,12 @@ from .views import (
     RainfallGaugeApiView,
     RainfallRtrrApiView,
     RainfallRtrgApiView,
-    # get_latest_observation_timestamps_summary
     GarrRecordViewset,
     GaugeRecordViewset,
     RtrrRecordViewset,
     RtrgRecordViewset,
+    GaugeGeoViewSet,
+    PixelGeoViewSet,
     RainfallEventViewset,
     LatestObservationTimestampsSummary,
     get_myrain_24hours,
@@ -30,6 +31,8 @@ router.register(r'calibrated-gauge', GaugeRecordViewset)
 router.register(r'realtime-radar', RtrrRecordViewset)
 router.register(r'realtime-gauge', RtrgRecordViewset)
 router.register(r'rainfall-events', RainfallEventViewset)
+router.register(r'gauges', GaugeGeoViewSet)
+router.register(r'pixels', PixelGeoViewSet)
 router.register(r'v2/latest-observations', LatestObservationTimestampsSummary, basename='latest_observations')
 
 # -----------------------------------------------
@@ -38,7 +41,7 @@ router.register(r'v2/latest-observations', LatestObservationTimestampsSummary, b
 urlpatterns = [
     
     # --------------------------
-    # high-level custom routes -
+    # custom asynchronous views
 
     # GARR
     path('v2/pixel/historic/', RainfallGarrApiView.as_view()),
@@ -52,11 +55,9 @@ urlpatterns = [
     #RTRG
     path('v2/gauge/realtime/', RainfallRtrgApiView.as_view()),
     path('v2/gauge/realtime/<str:jobid>/', RainfallRtrgApiView.as_view()),
-    # path('v2/gauge/raw/<str:jobid>/', RainfallRtrgApiView.as_view()),
 
     # --------------------------
     # custom routes (for function-based views)
-    # path('v2/latest-observations/', LatestObservationTimestampsSummary.as_view({'get': 'list'})),
 
     path('v3/myrain/24hours/', get_myrain_24hours),
     path('v3/myrain/48hours/', get_myrain_48hours),

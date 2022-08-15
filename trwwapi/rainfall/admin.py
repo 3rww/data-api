@@ -17,9 +17,13 @@ class RainfallEventAdmin(admin.ModelAdmin):
     list_filter = ('start_dt', 'end_dt')
     search_fields = ['start_dt', 'end_dt', 'report_label', 'event_label']
 
+class GaugeAdmin(LeafletGeoAdmin):
+    list_filter = ['active']
+    search_fields = ['web_id', 'ext_id', 'nws_des', 'name', 'address']
+
 for i in [
     [RainfallEvent, RainfallEventAdmin],
     [Pixel, LeafletGeoAdmin],
-    [Gauge, LeafletGeoAdmin]
+    [Gauge, GaugeAdmin]
 ]:
     admin.site.register(*i)

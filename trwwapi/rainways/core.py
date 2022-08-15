@@ -5,6 +5,7 @@ from typing import List, Tuple
 from dataclasses import field
 from datetime import datetime
 
+from django.db.models import Sum
 from marshmallow_dataclass import dataclass as mdc
 import requests
 import rasterio
@@ -17,7 +18,7 @@ from dateutil.relativedelta import relativedelta
 
 from ..rainfall.api_v2.core import query_one_sensor_rollup_by_dt
 from ..rainfall.models import (
-    RtrrObservation, 
+    RtrrRecord,
     Pixel
 )
 from ..common.config import (
@@ -321,19 +322,22 @@ class RwPublicAnalysis(RwCore):
             self.messages.extend([str(e), "Radar rainfall data is not available for for this location from 3RWW."])
             return None
 
-        try:
-            # get datetimes for the last six months
-            end_dt = datetime.now().replace(day=1,hour=0,minute=0, second=0,microsecond=0)
-            start_dt = end_dt + relativedelta(months=-6)
-            # query the single sensor and get back a monthly rainfall totals
-            results = query_one_sensor_rollup_by_dt(
-                RtrrObservation, 
-                [start_dt, end_dt], 
-                sensor_id
-            )
-            self.results.rainfall.extend(results)
-            return results
-        except RtrrObservation.DoesNotExist as e:
-            self.status = 'failed'
-            self.messages.extend([str(e), "Radar rainfall data is not available for for this location from 3RWW."])
-            return None
+        # try:
+        # get datetimes for the last six months
+        end_dt = datetime.now().replace(day=1,hour=0,minute=0, second=0,microsecond=0)
+        start_dt = end_dt + relativedelta(months=-6)
+        # query the single sensor and get back a monthly rainfall totals
+        results = RtrrRecord.objects\
+            .filter(ts__gte=start_dt, ts__lte=end_dt, sid=sensor_id)\
+            .aggregate(Sum('val'))
+        # results = query_one_sensor_rollup_by_dt(
+        #     RtrrObservation, 
+        #     [start_dt, end_dt], 
+        #     sensor_id
+        # )
+        self.results.rainfall.extend([results])
+        return []
+        # except RtrrObservation.DoesNotExist as e:
+        #     self.status = 'failed'
+        #     self.messages.extend([str(e), "Radar rainfall data is not available for for this location from 3RWW."])
+        #     return None

@@ -8,6 +8,7 @@ from django_filters import filters
 from django.contrib.gis.geos import Point
 from django.shortcuts import render
 from rest_framework.response import Response
+from rest_framework.filters import SearchFilter
 from rest_framework.views import APIView
 from rest_framework.generics import GenericAPIView
 from rest_framework import viewsets, permissions, routers
@@ -21,13 +22,11 @@ from ..common.config import TZI
 # from .api_v2.config import TZI
 
 from .serializers import (
-    GarrObservationSerializer,
+    GaugeSerializer,
+    PixelSerializer,
     GarrRecordSerializer, 
-    GaugeObservationSerializer,
     GaugeRecordSerializer,
     RtrgRecordSerializer, 
-    RtrrObservationSerializer, 
-    RtrgObservationSerializer,
     RainfallEventSerializer,
     RtrrRecordSerializer,
     GarrRecordSerializer,
@@ -45,13 +44,9 @@ from .selectors import (
     get_rainfall_total_for
 )
 from .models import (
-    GarrObservation,
     GarrRecord, 
-    GaugeObservation,
     GaugeRecord, 
-    RtrrObservation, 
     RtrrRecord,
-    RtrgObservation,
     RtrgRecord,
     RainfallEvent, 
     Pixel, 
@@ -81,8 +76,11 @@ class ApiDefaultRouter(routers.DefaultRouter):
     APIRootView = ApiRouterRootView
 
 # -------------------------------------------------------------------
-# HIGH-LEVEL API VIEWS
-# these are the views that do the work for us
+# ASYNCHRONOUS API VIEWS
+# these views are for the big, long-running queries that are run outside of 
+# the web request/response cycle. Each view can be polled for job status and,
+# when the query as completed or failed, results or an error message, 
+# respectively. 
 
 class RainfallGaugeApiView(GenericAPIView):
     """Rain Gauge data, fully QA/QC'd and provided by 3RWW + ALCOSAN.
@@ -129,9 +127,10 @@ class RainfallRtrgApiView(GenericAPIView):
 
 
 # -------------------------------------------------------------------
-# LOW LEVEL API VIEWS
-# These return paginated data from the tables in the database as-is.
+# SYNCHRONOUS API VIEWS
+# These return data from the tables in the database as-is.
 # They show up in the django-rest-framework's explorable API pages.
+# All rainfall data accessed from these views is paginated.
 
 # --------------------
 # ViewSet Pagination:
@@ -298,13 +297,37 @@ class RtrgRecordViewset(RainfallRecordReadOnlyViewset):
     serializer_class  = RtrgRecordSerializer
     filterset_class = RtrgRecordFilter
     pagination_class = GaugeResultsSetPagination2
-    
+
+# --------------------
+# Sensor Geography Viewsets
+
+class GaugeGeoViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = Gauge.objects.all()
+    serializer_class = GaugeSerializer
+    filter_backends = [SearchFilter]
+    search_fields = ['active']
+
+class ActiveGaugeGeoViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = Gauge.objects.filter()
+    serializer_class = GaugeSerializer
+    def get_queryset(self):
+        # filter queryset by public visibility
+        return self.queryset.filter(active=True)
+
+class PixelGeoViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = Pixel.objects.all()
+    serializer_class = PixelSerializer
+
 
 # -------------------------------------------------------------------
-# HELPER VIEWS
-# These provide helpers for specific use cases
+# HELPER/CUSTOM VIEWS
+# These views exist outside of DRF's model-based viewset paradigm
 
 class LatestObservationTimestampsSummary(viewsets.ReadOnlyModelViewSet):
+    """provides a lookup of the last date/time of data available for each of the
+    rainfall sensor data types, as well as the timestamp of the last logged 
+    event
+    """
     
     def list(self, request, format=None):
         raw_summary = {
@@ -325,6 +348,10 @@ class LatestObservationTimestampsSummary(viewsets.ReadOnlyModelViewSet):
 
 
 def get_myrain_for(request, back_to: timedelta, back_to_text: str):
+    """get a human-readable (or virtual assistant-readable!) text string
+    describing the rainfall total for a specific latitude/longitude and recent 
+    timeframe
+    """
     text ="That didn't work."
 
     lat = request.GET.get('lat')
