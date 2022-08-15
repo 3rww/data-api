@@ -121,6 +121,9 @@ class Gauge(PandasModelMixin):
     geom = models.PointField(null=True)
     active = models.BooleanField(default=True, null=True)
 
+    class Meta:
+        ordering = ["ext_id"]
+
     def __str__(self):
         return "{0} - {1}".format(self.web_id, self.name)
     
