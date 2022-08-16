@@ -15,7 +15,8 @@ RUN pip install pipenv
 COPY Pipfile /code/
 COPY Pipfile.lock /code/
 WORKDIR /code/
-RUN pipenv lock -r > requirements.txt
+# RUN pipenv lock -r > requirements.txt
+RUN pipenv requirements > requirements.txt
 RUN pip install -r requirements.txt
 # RUN pipenv install --deploy
 
