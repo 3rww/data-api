@@ -44,6 +44,7 @@ INTERNAL_IPS = [path for path in os.environ.get('INTERNAL_IPS', '').split(',') i
 # Application definition
 
 INSTALLED_APPS = [
+    'jazzmin',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',

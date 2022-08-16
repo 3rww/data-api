@@ -52,6 +52,7 @@ uritemplate = "*"
 tenacity = "*"
 codetiming = "*"
 objgraph = "*"
+django-jazzmin = "*"
 
 [requires]
 python_version = "3.10"
