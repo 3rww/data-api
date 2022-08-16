@@ -6,8 +6,11 @@ from django.db.models import (
     DateTimeField,
     OneToOneField,
     ForeignKey,
-    ManyToManyField
+    ManyToManyField,
+    SlugField,
+    JSONField
 )
+from django.template.defaultfilters import default, slugify
 from django.contrib.gis.db.models import PolygonField
 from django.contrib.gis.db.models.functions import Envelope
 
@@ -22,7 +25,7 @@ class Collection(TimestampedMixin):
     
     title = CharField(max_length=255, help_text="A human readable title describing the Collection.")
     description = TextField(blank=True, help_text="Detailed multi-line description to fully explain the Collection.")
-    resources = ManyToManyField('Resource', blank=True, null=True)
+    resources = ManyToManyField('Resource', blank=True)
     tags = TaggableManager(blank=True)
 
     # @property
@@ -42,10 +45,18 @@ class Resource(TimestampedMixin):
     very specific ways for Rainways analysis.
     """
 
-    title = CharField(max_length=255, blank=True, help_text="A human-readable title describing the resource.")
-    description = TextField(blank=True, help_text="Detailed multi-line description to explain the resource.")
+    def data_default():
+        return {}
+
+    def slug_default(name):
+        return slugify(name)
+        
+    title = CharField(max_length=255, blank=True, help_text="Name of the resource")
+    slug = SlugField(max_length=255, unique=True, default=None, null=True, blank=True)
+    description = TextField(blank=True, help_text="Detailed description of the resource")
     datetime = DateTimeField(verbose_name="Resource publication Date/Time", blank=True)
     href = CharField(max_length=2048, blank=True, help_text="Resource location. May be a URL or cloud resource (e.g., S3://")
+    meta = JSONField(default=data_default, blank=True, null=True)
     tags = TaggableManager(blank=True)
 
     def __str__(self) -> str:

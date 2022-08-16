@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 import gc
 import logging
+from typing import List
 import pdb
 import objgraph
 
@@ -425,3 +426,14 @@ def get_rainfall_total_for(postgres_table_model, sensor_ids, back_to: timedelta)
 
 def _get_ts_by_delta(model_class, timedelta_kwargs):
     return model_class.objects.filter(ts__gte=(datetime.now()-timedelta(**timedelta_kwargs)))
+
+# provide data for generating a pick list of municipalites, watersheds, etc.
+def get_reference_geographies(municipalities=True, watersheds=True):
+    return
+
+# return a list of pixels and gauges that overlap with one or more reference geographies
+def sensors_for_reference_geographies(
+    pixels:List[str]=[], 
+    gauges:List[str]=[]
+):
+    return
