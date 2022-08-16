@@ -50,9 +50,9 @@ class Resource(TimestampedMixin):
 
     def slug_default(name):
         return slugify(name)
-        
+
     title = CharField(max_length=255, blank=True, help_text="Name of the resource")
-    slug = SlugField(max_length=255, unique=True, default=None, null=True, blank=True)
+    slug = SlugField(max_length=255, unique=True, default=slug_default, null=True, blank=True)
     description = TextField(blank=True, help_text="Detailed description of the resource")
     datetime = DateTimeField(verbose_name="Resource publication Date/Time", blank=True)
     href = CharField(max_length=2048, blank=True, help_text="Resource location. May be a URL or cloud resource (e.g., S3://")
@@ -61,3 +61,15 @@ class Resource(TimestampedMixin):
 
     def __str__(self) -> str:
         return " | ".join([i for i in [self.title, self.href] if i is not None])
+
+
+class Boundary(TimestampedMixin):
+
+    def data_default():
+        return {}
+
+    uid = models.CharField(max_length=255, default=None, null=True, blank=True)
+    label = models.CharField(max_length=255, default=None, null=True, blank=True)
+    meta = JSONField(default=data_default, blank=True, null=True)
+    layer = models.ForeignKey('Resource', on_delete=models.CASCADE, blank=True, null=True)
+    geom = PolygonField()

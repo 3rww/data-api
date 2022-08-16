@@ -126,7 +126,7 @@ class Gauge(PandasModelMixin):
 
     def __str__(self):
         return "{0} - {1}".format(self.web_id, self.name)
-    
+
 
 # MODELNAME_TO_GEOMODEL_LOOKUP helps us dynamically select the correct geodata 
 # for an observation model, since we don't enforce a relationship between the 
