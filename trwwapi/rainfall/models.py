@@ -3,9 +3,11 @@ from django.contrib.gis.db import models
 # from django.contrib.postgres.indexes import 
 from django.db.models import JSONField
 from django.db.models.constraints import UniqueConstraint
+
+from taggit.managers import TaggableManager
+
 from ..common.mixins import PandasModelMixin, TimestampedMixin
-
-
+from ..common.models import Collection as mCollection, Resource as mResource, Boundary as mBoundary
 
 # --------------------------------------------------------------
 # Rainfall Record Models
@@ -126,6 +128,24 @@ class Gauge(PandasModelMixin):
 
     def __str__(self):
         return "{0} - {1}".format(self.web_id, self.name)
+
+
+# --------------------------------------------------------------
+# Tables for reference data
+
+
+class Collection(mCollection):
+    tags = TaggableManager(blank=True, related_name="rainfall_collection")
+    pass
+
+
+class Resource(mResource):
+    tags = TaggableManager(blank=True, related_name="rainfall_resource")
+    pass
+
+
+class Boundary(mBoundary):
+    pass
 
 
 # MODELNAME_TO_GEOMODEL_LOOKUP helps us dynamically select the correct geodata 

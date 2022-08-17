@@ -8,13 +8,15 @@ import objgraph
 from django.utils.timezone import localtime, now
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import models
+from django.contrib.gis.db.models import Union
 from rest_framework import status
 from rest_framework.response import Response
 from marshmallow import ValidationError
 from dateutil import tz
 from django_rq import job, get_queue
 
-
+from ..rainways.models import Boundary, Resource
+from .models import Pixel, Gauge
 from ..utils import DebugMessages, _parse_request
 from .api_v2.core import (
     parse_datetime_args,
@@ -428,12 +430,22 @@ def _get_ts_by_delta(model_class, timedelta_kwargs):
     return model_class.objects.filter(ts__gte=(datetime.now()-timedelta(**timedelta_kwargs)))
 
 # provide data for generating a pick list of municipalites, watersheds, etc.
-def get_reference_geographies(municipalities=True, watersheds=True):
-    return
+def get_reference_geographies_for_pick_list(
+    municipalities_resource_slug="allegheny-county-municipalities", 
+    watersheds_resource_slug="allegheny-county-municipalities"
+    ):
+    result = dict()
+    if municipalities_resource_slug:
+        result['municipalities'] = Boundary.objects.filter(layer__slug=municipalities_resource_slug).values('id','label')
+    if watersheds_resource_slug:
+        result['watersheds'] = Boundary.objects.filter(layer__slug=watersheds_resource_slug).values('id','label')
+    return result
 
 # return a list of pixels and gauges that overlap with one or more reference geographies
-def sensors_for_reference_geographies(
-    pixels:List[str]=[], 
-    gauges:List[str]=[]
-):
-    return
+def sensors_for_reference_geographies(boundary_ids:List[int]):
+    
+    boundaries = Boundary.objects.filter(id__in=boundary_ids).aggregate(geom=Union('geom'))['geom']
+    pixel_ids = Pixel.objects.filter(geom__intersects=boundaries).values('pixel_id')
+    gauge_ids = Gauge.objects.filter(geom__intersects=boundaries).values('web_id')
+
+    return pixel_ids, gauge_ids

@@ -5,7 +5,10 @@ from leaflet.admin import LeafletGeoAdmin
 from .models import (
     RainfallEvent,
     Pixel,
-    Gauge
+    Gauge,
+    Collection,
+    Resource,
+    Boundary
 )
 
 # customize admin site info
@@ -24,6 +27,9 @@ class GaugeAdmin(LeafletGeoAdmin):
 for i in [
     [RainfallEvent, RainfallEventAdmin],
     [Pixel, LeafletGeoAdmin],
-    [Gauge, GaugeAdmin]
+    [Gauge, GaugeAdmin],
+    [Collection],
+    [Resource],
+    [Boundary, LeafletGeoAdmin]
 ]:
     admin.site.register(*i)
