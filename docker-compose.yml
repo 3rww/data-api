@@ -2,7 +2,7 @@ version: '3'
 services:
     db:
         image: quay.io/azavea/postgis:3-postgres12.2-slim
-        ports: 
+        ports:
             - "8765:5432"
         restart: always
         volumes:
@@ -10,7 +10,7 @@ services:
         env_file: scripts/docker/.env
     rainfall_db:
         image: quay.io/azavea/postgis:3-postgres12.2-slim
-        ports: 
+        ports:
             - "8766:5432"
         restart: always
         volumes:
@@ -36,7 +36,7 @@ services:
             - "6379:6379"
         env_file: scripts/docker/.env
     app:
-        build: 
+        build:
             context: .
             dockerfile: scripts/docker/trwwapi/Dockerfile
         command: python3 manage.py runserver 0.0.0.0:7000
@@ -47,15 +47,17 @@ services:
         ports:
             - "7000:7000"
         volumes:
-          - .:/code
+            - .:/code
         env_file: scripts/docker/.env
+        environment:
+            DEBUG: 1
     worker:
         build:
             context: .
             dockerfile: scripts/docker/trwwapi/Dockerfile
         command: python3 manage.py rqworker default
         depends_on:
-            - app        
+            - app
         environment:
             DEBUG: 1
         volumes:

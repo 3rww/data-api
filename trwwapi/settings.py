@@ -126,6 +126,8 @@ DATABASES = {
     }    
 }
 
+db_from_env, rainfall_db_from_env = None, None
+
 # use the connection string in DATABASE_URL if found in environment
 # (utilized by Heroku, can optionally be used locally to override)
 if 'DATABASE_URL' in os.environ.keys():
@@ -134,8 +136,18 @@ if 'DATABASE_URL' in os.environ.keys():
     DATABASES['default']['ENGINE'] = 'django.contrib.gis.db.backends.postgis'
 
 if 'RAINFALL_RDS_DATABASE_URL' in os.environ.keys():
-    DATABASES['rainfall_db'] = dj_database_url.parse(os.getenv('RAINFALL_RDS_DATABASE_URL'), conn_max_age=600, ssl_require=True)
+    rainfall_db_from_env = dj_database_url.parse(os.getenv('RAINFALL_RDS_DATABASE_URL'), conn_max_age=600, ssl_require=True)
+    DATABASES['rainfall_db'].update(rainfall_db_from_env)
     DATABASES['rainfall_db']['ENGINE'] = 'django.contrib.gis.db.backends.postgis'
+    
+for each_db_name, each_db_config in DATABASES.items():
+    print(f"{each_db_name}: connected to database `{each_db_config.get('NAME')}` on {each_db_config.get('HOST')}")
+
+if 'DATABASE_URL' in os.environ.keys():
+    print("NOTICE: connected to production Data-API database")
+
+if 'RAINFALL_RDS_DATABASE_URL' in os.environ.keys():
+    print("NOTICE: connected to production Rainfall database")
 
 DATABASE_ROUTERS = (
     'trwwapi.routers.RainfallDbRouter',
