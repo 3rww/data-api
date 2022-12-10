@@ -218,7 +218,7 @@ OUT_FIELDS = ["xts", "sid", "val", "src"]
 
 # @retry(stop=(stop_after_attempt(5) | stop_after_delay(60)), wait=wait_random_exponential(multiplier=2, max=30), reraise=True)
 @Timer(name="query_pgdb", text="{name}: {:.4f}s")
-def query_pgdb(postgres_table_model, sensor_ids, all_datetimes, timezone=TZ):
+def query_pgdb(postgres_table_model, sensor_ids, all_datetimes, out_fields=OUT_FIELDS):
 
     tablename = postgres_table_model.objects.model._meta.db_table
     print("querying: {0}".format(tablename))
@@ -260,7 +260,7 @@ def query_pgdb(postgres_table_model, sensor_ids, all_datetimes, timezone=TZ):
     #                 output_field=DateTimeField()
     #             )
     #         )\
-    #         .values(*OUT_FIELDS)
+    #         .values(*out_fields)
     #         #.iterator()
             
     # else:
@@ -271,7 +271,7 @@ def query_pgdb(postgres_table_model, sensor_ids, all_datetimes, timezone=TZ):
             sid__in=sensor_ids
         )\
         .annotate(xts=F("ts"))\
-        .values(*OUT_FIELDS)
+        .values(*out_fields)
         #.iterator()
 
     #pdb.set_trace()

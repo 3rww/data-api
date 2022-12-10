@@ -1,12 +1,13 @@
 from datetime import timedelta
 from collections import OrderedDict
-# from django.contrib.auth.models import User, Group
+
 from django.utils.safestring import mark_safe
 from django.core.paginator import Paginator
 from django.utils.functional import cached_property
 from django_filters import filters
 from django.contrib.gis.geos import Point
 from django.shortcuts import render
+
 from rest_framework.response import Response
 from rest_framework.filters import SearchFilter
 from rest_framework.views import APIView
@@ -16,10 +17,6 @@ from rest_framework.decorators import api_view
 from rest_framework.pagination import PageNumberPagination, CursorPagination 
 from django_filters.rest_framework import FilterSet, DjangoFilterBackend
 
-
-
-from ..common.config import TZI
-# from .api_v2.config import TZI
 
 from .serializers import (
     GaugeSerializer,
@@ -34,14 +31,10 @@ from .serializers import (
     RtrrRecordSerializer,
     RtrgRecordSerializer
 )
-from .selectors import (
+from .services import (
     handle_request_for,
-    get_latest_garrobservation,
-    get_latest_gaugeobservation,
-    get_latest_rainfallevent,
-    get_latest_rtrgobservation,
-    get_latest_rtrrobservation,
-    get_rainfall_total_for
+    get_myrain_for,
+    get_latest_timestamps_for_all_models
 )
 from .models import (
     GarrRecord, 
@@ -77,17 +70,13 @@ class ApiDefaultRouter(routers.DefaultRouter):
 
 # -------------------------------------------------------------------
 # ASYNCHRONOUS API VIEWS
-# these views are for the big, long-running queries that are run outside of 
-# the web request/response cycle. Each view can be polled for job status and,
-# when the query as completed or failed, results or an error message, 
-# respectively. 
+# these views are for the big, long-running queries. Each view can be polled 
+# for job status and, when the query as completed or failed, results or an error
+#  message, respectively.
 
 class RainfallGaugeApiView(GenericAPIView):
     """Rain Gauge data, fully QA/QC'd and provided by 3RWW + ALCOSAN.
     """
-
-    # def get(self, request, *args, **kwargs):
-    #     return handle_request_for(GaugeObservation, request, *args, **kwargs)
 
     def post(self, request, *args, **kwargs):
         return handle_request_for(GaugeRecord, request, *args, **kwargs)
@@ -97,9 +86,6 @@ class RainfallGarrApiView(GenericAPIView):
     """Gauge-Adjusted Radar Rainfall Data. Radar-based rainfall estimated calibrated with rain gauges, interpolated to 1km pixels. Historic data only. Provided by Vieux Associates.
     """
 
-    # def get(self, request, *args, **kwargs):
-    #     return handle_request_for(GarrObservation, request, *args, **kwargs)
-
     def post(self, request, *args, **kwargs):
         return handle_request_for(GarrRecord, request, *args, **kwargs)
 
@@ -107,9 +93,6 @@ class RainfallGarrApiView(GenericAPIView):
 class RainfallRtrrApiView(GenericAPIView):
     """Real-time Radar Rainfall data. Provided through Vieux Associates. Data is provisional and has not be through a QA/QC process.
     """        
-
-    # def get(self, request, *args, **kwargs):
-    #     return handle_request_for(RtrrObservation, request, *args, **kwargs)
 
     def post(self, request, *args, **kwargs):
         return handle_request_for(RtrrRecord, request, *args, **kwargs)
@@ -119,15 +102,12 @@ class RainfallRtrgApiView(GenericAPIView):
     """Real-time Rain Gauge data. Provided through Datawise. Data is provisional and has not be through a QA/QC process.
     """    
 
-    # def get(self, request, *args, **kwargs):
-    #     return handle_request_for(RtrgObservation, request, *args, **kwargs)
-
     def post(self, request, *args, **kwargs):
         return handle_request_for(RtrgRecord, request, *args, **kwargs)
 
 
 # -------------------------------------------------------------------
-# SYNCHRONOUS API VIEWS
+# SYNCHRONOUS API VIEWS - views on tables
 # These return data from the tables in the database as-is.
 # They show up in the django-rest-framework's explorable API pages.
 # All rainfall data accessed from these views is paginated.
@@ -186,8 +166,7 @@ class RainfallEventFilter(FilterSet):
 
 
 class RainfallEventViewset(viewsets.ReadOnlyModelViewSet):
-    """
-    Get a lists of rainfall event time periods in Allegheny County since 2000. Events are identified by Vieux Associates; more detail on each event is provided in Vieux's monthly report to 3 Rivers Wet Weather. Please note that the list is not comprehensive.
+    """Get a lists of rainfall event time periods in Allegheny County since 2000. Events are identified by Vieux Associates; more detail on each event is provided in Vieux's monthly report to 3 Rivers Wet Weather. Please note that the list is not comprehensive.
     """
 
     queryset = RainfallEvent.objects.all()
@@ -328,66 +307,20 @@ class LatestObservationTimestampsSummary(viewsets.ReadOnlyModelViewSet):
     rainfall sensor data types, as well as the timestamp of the last logged 
     event
     """
-    
     def list(self, request, format=None):
-        raw_summary = {
-            "calibrated-radar": get_latest_garrobservation(),
-            "calibrated-gauge": get_latest_gaugeobservation(),
-            "realtime-radar": get_latest_rtrrobservation(),
-            "realtime-gauge": get_latest_rtrgobservation(),
-            "rainfall-events": get_latest_rainfallevent(),
-        }
-
-        summary = {
-            k: v.ts.astimezone(TZI).isoformat() if v is not None else None
-            for k, v in 
-            raw_summary.items()
-        }
-
+        summary = get_latest_timestamps_for_all_models()
         return Response(summary)
 
 
-def get_myrain_for(request, back_to: timedelta, back_to_text: str):
-    """get a human-readable (or virtual assistant-readable!) text string
-    describing the rainfall total for a specific latitude/longitude and recent 
-    timeframe
-    """
-    text ="That didn't work."
-
-    lat = request.GET.get('lat')
-    lng = request.GET.get('lng')
-    srid = request.GET.get('srid')
-
-    if all([lat, lng]):
-
-        p = Point(float(lng), float(lat)) #, srid=srid if srid else 4326)
-        p.srid = srid if srid else 4326
-        pixels = Pixel.objects.filter(geom__contains=p)
-
-        if len(list(pixels)) > 0:
-
-            total = get_rainfall_total_for(RtrrRecord, [pixel.pixel_id for pixel in pixels], timedelta(days=2))
-
-            if total:
-                text = """According to 3 Rivers Wet Weather, your location received approximately {0} inches of rainfall {1}.""".format(total, back_to_text)
-            else:
-                text = "Sorry, it looks like rainfall data is unavailable for your location for that timeframe. Check back soon!"
-        else:
-            text = "Sorry, we can't get detailed rainfall data for your location."
-    else:        
-        text = "Sorry, you didn't provide enough location data to answer your question."
-
-    # text += " For more information about rainfall and infrastructure in the greater Pittsburgh area, visit w w w dot 3 rivers wet weather dot org."
-    text += " For more information about rainfall and infrastructure in the greater Pittsburgh area, visit www.3riverswetweather.org"
-
-    return render(request, 'speech.html', {"text": text})
-
 
 def get_myrain_24hours(request):
-    return get_myrain_for(request, timedelta(days=1), "over the past 24 hours")
+    text = get_myrain_for(request, timedelta(days=1), "over the past 24 hours")
+    return render(request, 'speech.html', {"text": text})
     
 def get_myrain_48hours(request):
-    return get_myrain_for(request, timedelta(days=2), "over the past 48 hours")
+    text = get_myrain_for(request, timedelta(days=2), "over the past 48 hours")
+    return render(request, 'speech.html', {"text": text})
 
 def get_myrain_pastweek(request):
-    return get_myrain_for(request, timedelta(days=7), "over the past week")
+    text = get_myrain_for(request, timedelta(days=7), "over the past week")
+    return render(request, 'speech.html', {"text": text})

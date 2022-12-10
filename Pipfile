@@ -54,6 +54,7 @@ codetiming = "*"
 objgraph = "*"
 django-jazzmin = "*"
 ipython = "*"
+django-pivot = "*"
 
 [requires]
 python_version = "3.10"

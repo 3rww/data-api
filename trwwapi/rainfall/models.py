@@ -31,6 +31,9 @@ class RainfallRecordMixin(PandasModelMixin):
         ]
         #in_db = "rainfall_db"
         managed = False
+
+    def __str__(self):
+        return f"{self.src} {self.sid} | {self.ts.isoformat()} | {self.val}"
     
 
 class GaugeRecord(RainfallRecordMixin):

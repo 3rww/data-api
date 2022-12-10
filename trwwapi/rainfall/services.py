@@ -8,12 +8,16 @@ import objgraph
 from django.utils.timezone import localtime, now
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import models
+from django.db.models import Value, Sum, F, Func
+from django.db.models.functions import Concat
 from django.contrib.gis.db.models import Union
+from django.contrib.gis.geos import Point
 from rest_framework import status
 from rest_framework.response import Response
 from marshmallow import ValidationError
 from dateutil import tz
 from django_rq import job, get_queue
+from django_pivot.pivot import pivot
 
 from ..rainways.models import Boundary, Resource
 from .models import Pixel, Gauge
@@ -26,15 +30,10 @@ from .api_v2.core import (
     format_results
 )
 from ..common.config import (
-#from .api_v2.config import (
     DELIMITER,
     TZ,
+    TZI,
     F_CSV,
-    INTERVAL_15MIN,
-    INTERVAL_DAILY,
-    INTERVAL_HOURLY,
-    INTERVAL_MONTHLY,
-    INTERVAL_SUM,
     MAX_RECORDS
 )
 from .models import (
@@ -52,8 +51,9 @@ from .serializers import (
 
 logger = logging.getLogger(__name__)
 
+
 # ------------------------------------------------------------------------------
-# SELECTOR+WORKER FOR THE HIGH LEVEL API VIEWS
+# SELECTOR+WORKER FOR THE ASYNC API VIEWS
 
 @job
 def get_rainfall_data(postgres_table_model, raw_args=None):
@@ -373,13 +373,14 @@ def handle_request_for(rainfall_model, request, *args, **kwargs):
         gc.collect()
         return Response(response.as_dict(), status=status.HTTP_200_OK)
 
+
 # ------------------------------------------------------------------------------
 # SELECTORS
 
-# -----------------------
+# -------------------------------------
 # get latest observation timestamps
 
-def _get_latest(model_class, timestamp_field="ts"):
+def get_latest_observation_for(model_class, timestamp_field="ts"):
     """gets the latest record from the model, by default using the 
     timestamp_field arg. Returns a single instance of model_class.
     """
@@ -398,36 +399,41 @@ def _get_latest(model_class, timestamp_field="ts"):
     except (model_class.DoesNotExist, AttributeError):
         return None
 
-def get_latest_garrobservation():
-    return _get_latest(GarrRecord)
+def get_latest_garr_ts():
+    return get_latest_observation_for(GarrRecord)
 
-def get_latest_gaugeobservation():
-    return _get_latest(GaugeRecord)
+def get_latest_gauge_ts():
+    return get_latest_observation_for(GaugeRecord)
 
-def get_latest_rtrrobservation():
-    return _get_latest(RtrrRecord)
+def get_latest_rtrr_ts():
+    return get_latest_observation_for(RtrrRecord)
 
-def get_latest_rtrgobservation():
-    return _get_latest(RtrgRecord)
+def get_latest_rtrg_ts():
+    return get_latest_observation_for(RtrgRecord)
 
 def get_latest_rainfallevent():
-    return _get_latest(RainfallEvent, 'start_dt')
+    return get_latest_observation_for(RainfallEvent, 'start_dt')
 
-def get_rainfall_total_for(postgres_table_model, sensor_ids, back_to: timedelta):
+def get_latest_timestamps_for_all_models():
+    raw_summary = {
+        "calibrated-radar": get_latest_garr_ts(),
+        "calibrated-gauge": get_latest_gauge_ts(),
+        "realtime-radar": get_latest_rtrr_ts(),
+        "realtime-gauge": get_latest_rtrg_ts(),
+        "rainfall-events": get_latest_rainfallevent(),
+    }
 
-    end_dt = localtime(now(), TZ)
-    start_dt = end_dt - back_to
+    summary = {
+        k: v.ts.astimezone(TZI).isoformat() if v is not None else None
+        for k, v in 
+        raw_summary.items()
+    }
 
-    rows = query_pgdb(postgres_table_model, sensor_ids, [start_dt, end_dt])
-    if rows:
-        return round(sum(x['val'] for x in rows if x['val']), 1)
-    else:
-        return None
-# -----------------------
-# get records using a timestamp delta
+    return summary
 
-def _get_ts_by_delta(model_class, timedelta_kwargs):
-    return model_class.objects.filter(ts__gte=(datetime.now()-timedelta(**timedelta_kwargs)))
+
+# -------------------------------------
+# select reference geographies
 
 # provide data for generating a pick list of municipalites, watersheds, etc.
 def get_reference_geographies_for_pick_list(
@@ -442,10 +448,86 @@ def get_reference_geographies_for_pick_list(
     return result
 
 # return a list of pixels and gauges that overlap with one or more reference geographies
-def sensors_for_reference_geographies(boundary_ids:List[int]):
+def get_sensors_for_reference_geographies(boundary_ids:List[int]):
     
     boundaries = Boundary.objects.filter(id__in=boundary_ids).aggregate(geom=Union('geom'))['geom']
     pixel_ids = Pixel.objects.filter(geom__intersects=boundaries).values('pixel_id')
     gauge_ids = Gauge.objects.filter(geom__intersects=boundaries).values('web_id')
 
     return pixel_ids, gauge_ids
+
+
+# -------------------------------------
+# My Rain (speech to text to speech)
+
+def get_rainfall_total_for(postgres_table_model, sensor_ids, back_to: timedelta):
+
+    end_dt = localtime(now(), TZ)
+    start_dt = end_dt - back_to
+
+    rows = query_pgdb(postgres_table_model, sensor_ids, [start_dt, end_dt])
+    if rows:
+        return round(sum(x['val'] for x in rows if x['val']), 1)
+    else:
+        return None
+
+def get_myrain_for(request, back_to:timedelta=timedelta(days=2), back_to_text:str="over the past 48 hours"):
+    """get a human-readable (or virtual assistant-readable!) text string
+    describing the rainfall total for a specific latitude/longitude and recent 
+    timeframe
+    """
+    text ="That didn't work."
+
+    lat = request.GET.get('lat')
+    lng = request.GET.get('lng')
+    srid = request.GET.get('srid')
+
+    if all([lat, lng]):
+
+        p = Point(float(lng), float(lat)) #, srid=srid if srid else 4326)
+        p.srid = srid if srid else 4326
+        pixels = Pixel.objects.filter(geom__contains=p)
+
+        if len(list(pixels)) > 0:
+
+            total = get_rainfall_total_for(RtrrRecord, [pixel.pixel_id for pixel in pixels], back_to)
+
+            if total:
+                text = """According to 3 Rivers Wet Weather, your location received approximately {0} inches of rainfall {1}.""".format(total, back_to_text)
+            else:
+                text = "Sorry, it looks like rainfall data is unavailable for your location for that timeframe. Check back soon!"
+        else:
+            text = "Sorry, we can't get detailed rainfall data for your location."
+    else:        
+        text = "Sorry, you didn't provide enough location data to answer your question."
+
+    # text += " For more information about rainfall and infrastructure in the greater Pittsburgh area, visit w w w dot 3 rivers wet weather dot org."
+    text += " For more information about rainfall and infrastructure in the greater Pittsburgh area, visit www.3riverswetweather.org"
+
+    return text
+
+
+# -------------------------------------
+# Recent Rainfall
+
+def select_rainfall_records_back_by_timedelta(
+    model_class:any[GarrRecord, GaugeRecord, RtrgRecord, RtrrRecord], 
+    timedelta_kwargs:dict
+    ):
+    """returns all rainfall records for a given model from now back to the
+    specified time-delta
+    """
+    return model_class.objects.filter(ts__gte=(datetime.now()-timedelta(**timedelta_kwargs)))
+
+
+def get_lastest_rtrr(hours=2):
+    r1 = select_rainfall_records_back_by_timedelta(RtrrRecord,dict(hours=hours))
+    r = r1.annotate(
+        xts=Func(
+            F('ts'), 
+            Value('yyyyMMDD-HHMI'),
+            function='to_char',
+            output_field=models.CharField()
+        )
+    )
+    pivot(queryset=r, rows="sid", column="fd", data="val", aggregation=Sum)

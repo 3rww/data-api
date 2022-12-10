@@ -15,7 +15,6 @@ from marshmallow import (
 )
 
 from ..common.config import (
-#from .api_v2.config import (
     TZ_STRING, 
     TZI, 
     TZINFOS,
@@ -37,14 +36,6 @@ class RainfallQueryResultSerializer(serializers.Serializer):
     ts = serializers.DateTimeField()
     val = serializers.FloatField(required=False)
     src = serializers.CharField(required=False)
-
-    # def to_representation(self, instance):
-    #     """Convert `ts` to an ISO-formatted, timezone aware datetime string."""
-    #     ret = super().to_representation(instance)
-    #     ret['ts'] = parse(ret['ts']).astimezone(TZI).isoformat()
-    #     return ret
-
-
 
 # ------------------------
 # Reference Models
