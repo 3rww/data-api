@@ -19,20 +19,24 @@ from .views import (
     LatestObservationTimestampsSummary,
     get_myrain_24hours,
     get_myrain_48hours,
-    get_myrain_pastweek
+    get_myrain_pastweek,
+    get_latest_realtime_data_for_ago_animation
 )
 
 # -----------------------------------------------
 # router for viewsets (low-level API endpoints)
 
 router = ApiDefaultRouter()
+
+router.register(r'gauges', GaugeGeoViewSet)
+router.register(r'pixels', PixelGeoViewSet)
+router.register(r'rainfall-events', RainfallEventViewset)
+
 router.register(r'calibrated-radar', GarrRecordViewset)
 router.register(r'calibrated-gauge', GaugeRecordViewset)
 router.register(r'realtime-radar', RtrrRecordViewset)
 router.register(r'realtime-gauge', RtrgRecordViewset)
-router.register(r'rainfall-events', RainfallEventViewset)
-router.register(r'gauges', GaugeGeoViewSet)
-router.register(r'pixels', PixelGeoViewSet)
+
 router.register(r'v2/latest-observations', LatestObservationTimestampsSummary, basename='latest_observations')
 
 # -----------------------------------------------
@@ -62,6 +66,8 @@ urlpatterns = [
     path('v3/myrain/24hours/', get_myrain_24hours),
     path('v3/myrain/48hours/', get_myrain_48hours),
     path('v3/myrain/pastweek/', get_myrain_pastweek),
+
+    path('v3/realtime/ago/', get_latest_realtime_data_for_ago_animation),
     
     # --------------------------
     # low-level DRF-registered routes

@@ -1,5 +1,6 @@
 from datetime import timedelta
 from collections import OrderedDict
+import json
 
 from django.utils.safestring import mark_safe
 from django.core.paginator import Paginator
@@ -8,6 +9,7 @@ from django_filters import filters
 from django.contrib.gis.geos import Point
 from django.shortcuts import render
 
+from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.filters import SearchFilter
 from rest_framework.views import APIView
@@ -34,7 +36,8 @@ from .serializers import (
 from .services import (
     handle_request_for,
     get_myrain_for,
-    get_latest_timestamps_for_all_models
+    get_latest_timestamps_for_all_models,
+    get_latest_realtime_rainfall_as_gdf
 )
 from .models import (
     GarrRecord, 
@@ -180,8 +183,8 @@ class RainfallEventViewset(viewsets.ReadOnlyModelViewSet):
 # ViewSet Filters: Rainfall Records
 
 class RainfallRecordFilter(FilterSet):
-    start_dt = filters.DateFilter(field_name="ts", lookup_expr="gte")
-    end_dt = filters.DateFilter(field_name="ts", lookup_expr="lte")
+    start_dt = filters.DateTimeFilter(field_name="ts", lookup_expr="gt")
+    end_dt = filters.DateTimeFilter(field_name="ts", lookup_expr="lte")
 
 class GaugeRecordFilter(RainfallRecordFilter):
     gauge = filters.TypedMultipleChoiceFilter(
@@ -299,28 +302,71 @@ class PixelGeoViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 # -------------------------------------------------------------------
-# HELPER/CUSTOM VIEWS
-# These views exist outside of DRF's model-based viewset paradigm
+# Rainfall metadata  
 
 class LatestObservationTimestampsSummary(viewsets.ReadOnlyModelViewSet):
     """provides a lookup of the last date/time of data available for each of the
     rainfall sensor data types, as well as the timestamp of the last logged 
     event
     """
+    def retrieve(self, request, format=None):
+        summary = get_latest_timestamps_for_all_models()
+        return Response(summary)
+
     def list(self, request, format=None):
         summary = get_latest_timestamps_for_all_models()
         return Response(summary)
 
-
+# -------------------------------------------------------------------
+# Rainfall summaries as text
 
 def get_myrain_24hours(request):
-    text = get_myrain_for(request, timedelta(days=1), "over the past 24 hours")
+    lat, lng, srid = request.GET.get('lat'), request.GET.get('lng'), request.GET.get('srid')
+    text = get_myrain_for(lat, lng, srid, timedelta(days=1), "over the past 24 hours")
     return render(request, 'speech.html', {"text": text})
     
 def get_myrain_48hours(request):
-    text = get_myrain_for(request, timedelta(days=2), "over the past 48 hours")
+    lat, lng, srid = request.GET.get('lat'), request.GET.get('lng'), request.GET.get('srid')
+    text = get_myrain_for(lat, lng, srid, timedelta(days=2), "over the past 48 hours")
     return render(request, 'speech.html', {"text": text})
 
 def get_myrain_pastweek(request):
-    text = get_myrain_for(request, timedelta(days=7), "over the past week")
+    lat, lng, srid = request.GET.get('lat'), request.GET.get('lng'), request.GET.get('srid')
+    text = get_myrain_for(lat, lng, srid, timedelta(days=7), "over the past week")
     return render(request, 'speech.html', {"text": text})
+
+# -------------------------------------------------------------------
+# Rainfall summaries for AGO
+
+@api_view(["GET"])
+def get_latest_realtime_data_for_ago_animation(request:Request):
+    """get 
+
+    Args:
+        hours (float): hours before now to get rainfall, defaults to 2
+        format (str): output format "json" or "html". defaults to json
+        f (str): "geojson" will return response as GeoJSON. If not provided, returns as an object with columns property and data property, the latter being a 2D array
+
+    Returns:
+        JSON: "GeoJSON" or a "split" columns/data object
+    """
+    hours = request.GET.get("hours", 2)
+    f = request.GET.get("f", "split")
+    
+    gdf = get_latest_realtime_rainfall_as_gdf(hours=float(hours))
+
+    if f == "geojson":
+        r = json.loads(
+            gdf.to_json(drop_id=True)
+        )
+    else: #elif f == "split"
+        # separate x and y columns from wkt column
+        gdf['x'] = gdf['wkt'].x
+        gdf['y'] = gdf['wkt'].y
+        # remove wkt column
+        gdf.drop(columns=["wkt"], inplace=True)
+        # convert to 2D columns array
+        r = gdf.to_dict(orient="split")
+        i = r.pop("index")
+
+    return Response(r)

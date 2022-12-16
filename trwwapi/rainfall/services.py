@@ -1,27 +1,33 @@
 from datetime import datetime, timedelta
 import gc
 import logging
-from typing import List
+from typing import List, Union as Any
 import pdb
 import objgraph
+import json
 
 from django.utils.timezone import localtime, now
 from django.core.exceptions import ObjectDoesNotExist
+from django.core.serializers import serialize
 from django.db import models
 from django.db.models import Value, Sum, F, Func
 from django.db.models.functions import Concat
 from django.contrib.gis.db.models import Union
+from django.contrib.gis.db.models.functions import AsWKT, Centroid, SnapToGrid
 from django.contrib.gis.geos import Point
+from shapely import wkt
 from rest_framework import status
 from rest_framework.response import Response
 from marshmallow import ValidationError
 from dateutil import tz
 from django_rq import job, get_queue
 from django_pivot.pivot import pivot
+import pandas as pd
+import geopandas as gpd
 
 from ..rainways.models import Boundary, Resource
 from .models import Pixel, Gauge
-from ..utils import DebugMessages, _parse_request
+from ..utils import DebugMessages, _parse_request, DateToChar
 from .api_v2.core import (
     parse_datetime_args,
     query_pgdb,
@@ -42,7 +48,8 @@ from .models import (
     GarrRecord,
     GaugeRecord,    
     RtrrRecord,
-    MODELNAME_TO_GEOMODEL_LOOKUP
+    MODELNAME_TO_GEOMODEL_LOOKUP,
+    GEOMODEL_SID_FIELD_LOOKUP
 )
 from .serializers import (
     ResponseSchema,
@@ -378,6 +385,29 @@ def handle_request_for(rainfall_model, request, *args, **kwargs):
 # SELECTORS
 
 # -------------------------------------
+# basic queries
+
+def select_rainfall_records_back_by_timedelta(
+    model_class:Any[GarrRecord, GaugeRecord, RtrgRecord, RtrrRecord], 
+    timedelta_kwargs:dict
+    ):
+    """returns all rainfall records for a given model from now back in time 
+    using a time delta
+    """
+    return model_class.objects.filter(ts__gte=(datetime.now()-timedelta(**timedelta_kwargs)))
+
+def get_rainfall_total_for(model_class, sensor_ids, back_to: timedelta):
+
+    end_dt = localtime(now(), TZ)
+    start_dt = end_dt - back_to
+
+    rows = query_pgdb(model_class, sensor_ids, [start_dt, end_dt])
+    if rows:
+        return round(sum(x['val'] for x in rows if x['val']), 1)
+    else:
+        return None
+
+# -------------------------------------
 # get latest observation timestamps
 
 def get_latest_observation_for(model_class, timestamp_field="ts"):
@@ -460,27 +490,12 @@ def get_sensors_for_reference_geographies(boundary_ids:List[int]):
 # -------------------------------------
 # My Rain (speech to text to speech)
 
-def get_rainfall_total_for(postgres_table_model, sensor_ids, back_to: timedelta):
-
-    end_dt = localtime(now(), TZ)
-    start_dt = end_dt - back_to
-
-    rows = query_pgdb(postgres_table_model, sensor_ids, [start_dt, end_dt])
-    if rows:
-        return round(sum(x['val'] for x in rows if x['val']), 1)
-    else:
-        return None
-
-def get_myrain_for(request, back_to:timedelta=timedelta(days=2), back_to_text:str="over the past 48 hours"):
+def get_myrain_for(lat, lng, srid, back_to:timedelta=timedelta(days=2), back_to_text:str="over the past 48 hours"):
     """get a human-readable (or virtual assistant-readable!) text string
-    describing the rainfall total for a specific latitude/longitude and recent 
+    describing the rainfall total for a specific latitude/longitude and recent
     timeframe
     """
     text ="That didn't work."
-
-    lat = request.GET.get('lat')
-    lng = request.GET.get('lng')
-    srid = request.GET.get('srid')
 
     if all([lat, lng]):
 
@@ -508,26 +523,240 @@ def get_myrain_for(request, back_to:timedelta=timedelta(days=2), back_to_text:st
 
 
 # -------------------------------------
-# Recent Rainfall
+# Cross-Tabbed ("Wide") Rainfall Summaries
 
-def select_rainfall_records_back_by_timedelta(
-    model_class:any[GarrRecord, GaugeRecord, RtrgRecord, RtrrRecord], 
-    timedelta_kwargs:dict
-    ):
-    """returns all rainfall records for a given model from now back to the
-    specified time-delta
-    """
-    return model_class.objects.filter(ts__gte=(datetime.now()-timedelta(**timedelta_kwargs)))
-
-
-def get_lastest_rtrr(hours=2):
-    r1 = select_rainfall_records_back_by_timedelta(RtrrRecord,dict(hours=hours))
-    r = r1.annotate(
-        xts=Func(
-            F('ts'), 
-            Value('yyyyMMDD-HHMI'),
-            function='to_char',
-            output_field=models.CharField()
-        )
+def get_rainfall_data_as_crosstab(
+    model_class:Any[GarrRecord, GaugeRecord, RtrgRecord, RtrrRecord],
+    start_dt,
+    end_dt,
+    sids:List[str]=None
+    ) -> Any[models.QuerySet, List]:
+    
+    filters=dict(
+        ts__gte=start_dt,
+        ts__lte=end_dt
     )
-    pivot(queryset=r, rows="sid", column="fd", data="val", aggregation=Sum)
+
+    if sids:
+        filters["sid__in"] = sids
+    
+    r1 = model_class.objects\
+        .filter(**filters)\
+        .annotate(xts=DateToChar(F('ts'), Value('yyyyMMDD-HHMI00')))#yyyyMMDD_HHMI
+        # .annotate(xts=DateToChar(F('ts'), Value('yyyyMMDD_HHMI'))) yyyyMMDDHHMI00 #yyyyMMDD_HHMI
+
+    r2 = pivot(queryset=r1, rows="sid", column="xts", data="val", aggregation=Sum)
+    
+    return r2
+
+def get_lastest_rainfall_as_crosstab(
+    model_class:Any[GarrRecord, GaugeRecord, RtrgRecord, RtrrRecord]=RtrrRecord,
+    hours:Any[int,float]=2, 
+    ) -> Any[models.QuerySet, List]:
+    """Generate a table of rainfall data where records are sensors and columns
+    are date/times. This format is useful for spatial timeseries data visualization.
+    Any/all sensors in the table are queried
+
+    Args:
+        hours (any[int,float], optional): hours before now to query. Defaults to 2.
+        model_class (any[GarrRecord, GaugeRecord, RtrgRecord, RtrrRecord], optional): Type of rainfall records to get. Defaults to RtrrRecord.
+
+    Returns:
+        queryset: a Queryset
+
+    Returns:
+        Union[models.QuerySet, List]: Queryset where items are sensors, and each 
+        items contains timeseries-ordered rainfall values.
+    """
+    end_dt = datetime.now()
+    start_dt = end_dt - timedelta(hours=hours)
+
+    return get_rainfall_data_as_crosstab(
+        model_class=model_class,
+        start_dt=start_dt,
+        end_dt=end_dt
+    )
+
+def get_rainfall_data_as_geocrosstab(
+    model_class:Any[GarrRecord, GaugeRecord, RtrgRecord, RtrrRecord],
+    start_dt,
+    end_dt,
+    sids:List[str]=None,
+    only_points:bool=True
+) -> gpd.GeoDataFrame:
+    """get rainfall data for a specific time period, optionally for specific 
+    sensors, and get it back as a geodataframe where rows are sensor features, 
+    columns are time intervals, and values are rainfall amounts.
+
+    Args:
+        model_class (Any[GarrRecord, GaugeRecord, RtrgRecord, RtrrRecord]): _description_
+        start_dt (datetime.datetime): _description_
+        end_dt (datetime.datetime): _description_
+        sids (List[str], optional): _description_. Defaults to None.
+        only_points (bool, optional): Only return point geometries. If sensor geometry is not a point, it gets converted to one (e.g., pixels to pixel centroids)
+
+    Returns:
+        dict: _description_
+    """
+    # ---------------------------------
+    # derive some info about the data requested
+
+    # lookup the geo model class, its sensor ID field, and its non-geometry fields
+    geo_model_class = MODELNAME_TO_GEOMODEL_LOOKUP[model_class._meta.object_name]
+    geo_model_sid_field = GEOMODEL_SID_FIELD_LOOKUP[geo_model_class._meta.object_name]
+    geo_model_fields = [f.name for f in geo_model_class._meta.fields if f.name != "geom"]
+
+    # --------------------------------- 
+    # rainfall data
+
+    # query the rainfall data table for the timeframe and sensors, get crosstab
+    data = get_rainfall_data_as_crosstab(
+        model_class=model_class,
+        start_dt=start_dt,
+        end_dt=end_dt,
+        sids=sids
+    )
+    
+    # --------------------------------- 
+    # pixel/gauge location
+    
+    locations:Any[models.QuerySet, List]=None
+    # filter locations by SIDs if those were provided 
+    if sids:
+        kwargs={f"{geo_model_sid_field}__in": sids}
+        locations = geo_model_class.objects.filter(**kwargs)
+    else:
+        locations = geo_model_class.objects.all()
+
+    # serialize to geojson
+    # location_gj = serialize('geojson', locations, geometry_field='geom')        
+
+    # selectively handle sensor location types, and add WKT geometry field
+
+    # for gauges, filter out inactive sites and those without IDs
+    if geo_model_class._meta.object_name == "Gauge":
+        locations = locations\
+            .filter(active=True)\
+            .exclude(web_id=None)\
+            .annotate(wkt=AsWKT('geom'))
+
+    # for pixels, calculate the Centroid and return as WKT
+    if geo_model_class._meta.object_name == "Pixel":
+        locations = locations\
+            .annotate(wkt=AsWKT(Centroid('geom')))
+
+    # add that wkt field to the list
+    geo_model_fields.append("wkt")
+    # return as list of dictionaries
+    locations = locations.values(*geo_model_fields)
+
+    # --------------------------------- 
+    # join 
+
+    # read rainfall data into a dataframe
+    df = pd.DataFrame(data)
+    df.set_index("sid", inplace=True)
+
+    # read the location data into a geodataframe
+    ldf = pd.DataFrame(locations)
+    ldf['wkt'] = gpd.GeoSeries.from_wkt(ldf['wkt'])
+    ldf['sid'] = ldf[geo_model_sid_field]
+    gdf = gpd.GeoDataFrame(ldf, geometry='wkt')
+    gdf.set_index('sid', inplace=True)
+
+    xdf = gdf.join(df, how="inner")
+    xdf.drop(columns=["id"], inplace=True)
+
+    return xdf
+
+
+# -------------------------------------
+# "Long" Geo Rainfall Summaries
+
+def get_latest_realtime_rainfall_as_gdf(
+    hours:Any[int,float]=2,
+    return_pixels=True, 
+    return_gauges=True,
+    ) -> gpd.GeoDataFrame:
+    """produce a "long" table of real-time rainfall records for pixels and gauges, 
+    with geometries joined to those records (all as points).
+
+    This approach, where geometries are replicated for all timeseries observations,
+    ultimately supports off-the-shelf timeseries animation in ArcGIS Online.
+
+    Args:
+        hours (Any[int,float], optional): _description_. Defaults to 2.
+        return_pixels (bool, optional): _description_. Defaults to True.
+        return_gauges (bool, optional): _description_. Defaults to True.
+
+    Returns:
+        gpd.GeoDataFrame: _description_
+    """    
+
+    if not any([return_pixels, return_gauges]):
+        return pd.DataFrame()
+
+    dfs = []
+    
+    if return_pixels:
+        # rainfall records for pixels
+        latest_rainfall_on_pixels = select_rainfall_records_back_by_timedelta(
+            RtrrRecord, 
+            dict(hours=hours)
+        )
+        pixel_data_df = pd.DataFrame(latest_rainfall_on_pixels.values("ts", "sid", "val", "src"))
+        pixel_data_df.set_index('sid', inplace=True)
+        
+        # pixel geometries (as points)
+        pixels = Pixel.objects\
+            .annotate(
+                sid=F("pixel_id"),
+                wkt=AsWKT(SnapToGrid(Centroid('geom'), 0.001)),
+                # metadata=None
+            )\
+            .values("sid", "wkt")
+        pixels_df = pd.DataFrame(pixels)
+        pixels_df.set_index('sid', inplace=True)
+
+        # join pixel geometries to pixel rainfall records dataframe
+        pixels_xdf = pixel_data_df.join(pixels_df, how="left")
+        pixels_xdf.reset_index(level=0, inplace=True)
+        dfs.append(pixels_xdf)
+
+    if return_gauges:
+        latest_rainfall_on_gauges = select_rainfall_records_back_by_timedelta(
+            RtrgRecord, 
+            dict(hours=hours)
+        )
+        gauge_data_df = pd.DataFrame(latest_rainfall_on_gauges.values("ts", "sid", "val", "src"))
+        gauge_data_df.set_index('sid', inplace=True)
+    
+        gauges = Gauge.objects\
+            .annotate(
+                sid=F("web_id"),
+                wkt=AsWKT(SnapToGrid('geom', 0.0001)),
+                #metadata={**all_other_fields}
+            )\
+            .values("sid", "wkt")
+        gauges_df = pd.DataFrame(gauges)
+        gauges_df.set_index('sid', inplace=True)
+
+        # join gauge geometries to gauge rainfall records dataframe
+        gauges_xdf = gauge_data_df.join(gauges_df, how="left")
+        gauges_xdf.reset_index(level=0, inplace=True)
+        dfs.append(gauges_xdf)
+
+    # combine the dataframes
+    df = pd.concat(dfs)
+    # remove the index
+    df.reset_index(level=0, inplace=True)
+    # convert Timestamps to string
+    df['ts'] = df['ts'].apply(lambda v: v.strftime('%Y-%m-%d %X'))
+    # convert WKT to geos object
+    df['wkt'] = gpd.GeoSeries.from_wkt(df['wkt'])
+    # read into geodataframe
+    gdf = gpd.GeoDataFrame(df, geometry='wkt')
+    # remove extra columns
+    gdf.drop(columns=["index"], inplace=True)
+
+    return gdf

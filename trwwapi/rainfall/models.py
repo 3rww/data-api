@@ -160,3 +160,8 @@ MODELNAME_TO_GEOMODEL_LOOKUP = {
     GaugeRecord._meta.object_name: Gauge,
     RtrgRecord._meta.object_name: Gauge,
 }
+
+GEOMODEL_SID_FIELD_LOOKUP = {
+    Pixel._meta.object_name: "pixel_id",
+    Gauge._meta.object_name: "web_id",
+}

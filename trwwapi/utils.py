@@ -1,4 +1,5 @@
 from django.conf import settings
+from django.db import models
 
 class DebugMessages():
 
@@ -22,3 +23,20 @@ def _parse_request(request):
         raw_args = request.data
 
     return raw_args
+
+
+class DateToChar(models.Func):
+    """
+    Custom Func expression to convert datetimes to str's in postgres database 
+    query. https://stackoverflow.com/a/70176841
+
+    Params for initializer
+    ------
+    expression_1
+        expression resulting in a date: ex: F('date')
+    expression_2
+        Format string as an expression: Value('YYYY-MM-DD'). Note: Column aliases cannot contain whitespace characters, quotation marks
+    """
+    arity = 2
+    function = 'to_char'
+    output_field = models.CharField()

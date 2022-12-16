@@ -1,6 +1,6 @@
 import json
 from django.contrib.gis.geos import GEOSGeometry
-from django.db.models import Model
+from django.db.models import Model, Func
 
 def load_geojson_to_model(
     geojson_as_dict:dict, 

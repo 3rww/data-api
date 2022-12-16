@@ -4,7 +4,7 @@ from datetime import datetime
 import petl as etl
 from dateutil import tz
 from dateutil.parser import parse
-from pynamodb.models import PynamoDbModel as PynamoDbModel
+from pynamodb.models import Model as PynamoDbModel
 from pynamodb.attributes import (
     UnicodeAttribute, 
     NumberAttribute
