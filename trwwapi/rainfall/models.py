@@ -25,7 +25,7 @@ class RainfallRecordMixin(PandasModelMixin):
 
     class Meta:
         abstract = True
-        # ordering = ['-ts', 'sid']
+        ordering = ['-ts']
         constraints = [
             UniqueConstraint(fields=['ts', 'sid'], name='%(class)s_uniq_record_constraint')
         ]

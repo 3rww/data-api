@@ -1,3 +1,4 @@
+import datetime
 from django.conf import settings
 from django.db import models
 
@@ -40,3 +41,5 @@ class DateToChar(models.Func):
     arity = 2
     function = 'to_char'
     output_field = models.CharField()
+
+rounded_qtr_hour = lambda dt: datetime.datetime(dt.year, dt.month, dt.day, dt.hour,15*(dt.minute // 15), tzinfo=dt.tzinfo)

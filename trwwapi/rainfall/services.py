@@ -27,7 +27,7 @@ import geopandas as gpd
 
 from ..rainways.models import Boundary, Resource
 from .models import Pixel, Gauge
-from ..utils import DebugMessages, _parse_request, DateToChar
+from ..utils import DebugMessages, _parse_request, DateToChar, rounded_qtr_hour
 from .api_v2.core import (
     parse_datetime_args,
     query_pgdb,
@@ -389,12 +389,25 @@ def handle_request_for(rainfall_model, request, *args, **kwargs):
 
 def select_rainfall_records_back_by_timedelta(
     model_class:Any[GarrRecord, GaugeRecord, RtrgRecord, RtrrRecord], 
-    timedelta_kwargs:dict
-    ):
-    """returns all rainfall records for a given model from now back in time 
-    using a time delta
+    timedelta_kwargs:dict,
+    round_to_last_quater_hour=True
+    ) -> models.QuerySet:
+    """builds queryset to returns all rainfall records for a given model 
+    from now back in time from the most recent quarter hour using a time delta.
+
+    Args:
+        model_class (Any[GarrRecord, GaugeRecord, RtrgRecord, RtrrRecord]): _description_
+        timedelta_kwargs (dict): datetime.timedelta keyword arguments (e.g., {"hours":2})
+        round_to_last_quater_hour (bool, optional): round timezone.now() to the most recent quarter hour. Defaults to True.
+
+    Returns:
+        models.QuerySet: a rainfall model queryset with a datetime-based filter applied.
     """
-    return model_class.objects.filter(ts__gte=(datetime.now()-timedelta(**timedelta_kwargs)))
+    if round_to_last_quater_hour:
+        dt = rounded_qtr_hour(now()) - timedelta(**timedelta_kwargs)
+    else:
+        dt = now() - timedelta(**timedelta_kwargs)
+    return model_class.objects.filter(ts__gte=dt)
 
 def get_rainfall_total_for(model_class, sensor_ids, back_to: timedelta):
 
@@ -703,8 +716,8 @@ def get_latest_realtime_rainfall_as_gdf(
         latest_rainfall_on_pixels = select_rainfall_records_back_by_timedelta(
             RtrrRecord, 
             dict(hours=hours)
-        )
-        pixel_data_df = pd.DataFrame(latest_rainfall_on_pixels.values("ts", "sid", "val", "src"))
+        ).values("ts", "sid", "val", "src").iterator()
+        pixel_data_df = pd.DataFrame(latest_rainfall_on_pixels)
         pixel_data_df.set_index('sid', inplace=True)
         
         # pixel geometries (as points)
@@ -727,8 +740,8 @@ def get_latest_realtime_rainfall_as_gdf(
         latest_rainfall_on_gauges = select_rainfall_records_back_by_timedelta(
             RtrgRecord, 
             dict(hours=hours)
-        )
-        gauge_data_df = pd.DataFrame(latest_rainfall_on_gauges.values("ts", "sid", "val", "src"))
+        ).values("ts", "sid", "val", "src").iterator()
+        gauge_data_df = pd.DataFrame(latest_rainfall_on_gauges)
         gauge_data_df.set_index('sid', inplace=True)
     
         gauges = Gauge.objects\
