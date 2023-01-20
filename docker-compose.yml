@@ -51,6 +51,7 @@ services:
         env_file: scripts/docker/.env
         environment:
             DEBUG: 1
+        mem_limit: 1gb
     worker:
         build:
             context: .
@@ -63,3 +64,4 @@ services:
         volumes:
             - .:/code
         env_file: scripts/docker/.env
+        mem_limit: 512m
