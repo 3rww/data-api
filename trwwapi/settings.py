@@ -159,10 +159,12 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # caching
 CACHES = {
     'default': {
-        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-        # 'TIMEOUT': 15,
+        'BACKEND': os.getenv('cache-backend', 'django.core.cache.backends.locmem.LocMemCache'),
+        'LOCATION': os.getenv('cache-location', 'trww-api-cache'),
+        'TIMEOUT': int(os.getenv('cache-timeout', 15)),
         'OPTIONS': {
-            'MAX_ENTRIES': 10
+            'MAX_ENTRIES': int(os.getenv('cache-options-maxentries', 10)),
+            'CULL_FREQUENCY': int(os.getenv('cache-options-cullfrequency', 3))
         }
     }
 }
