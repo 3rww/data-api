@@ -10,8 +10,20 @@ from django.utils.timezone import localtime, now
 from django.core.exceptions import ObjectDoesNotExist
 from django.core.serializers import serialize
 from django.db import models
-from django.db.models import Value, Sum, F, Func
-from django.db.models.functions import Concat
+from django.db.models import (
+    F, 
+    Q,
+    Func, 
+    Value, 
+    Case, 
+    When,
+    Sum, 
+    Avg, 
+    Max,
+    ExpressionWrapper,
+    CharField
+)
+from django.db.models.functions import Concat, ExtractMonth, ExtractYear
 from django.contrib.gis.db.models import Union
 from django.contrib.gis.db.models.functions import AsWKT, Centroid, SnapToGrid
 from django.contrib.gis.geos import Point
@@ -773,3 +785,58 @@ def get_latest_realtime_rainfall_as_gdf(
     gdf.drop(columns=["index"], inplace=True)
 
     return gdf
+
+def get_radar_rainfall_summary_from_now( 
+    sensor_id, 
+    timedelta_kwargs={"days":365},
+    round_to_last_quater_hour=True
+    ):
+
+    # -----------------------
+    # datetime from which to query
+    if round_to_last_quater_hour:
+        dt = rounded_qtr_hour(now()) - timedelta(**timedelta_kwargs)
+    else:
+        dt = now() - timedelta(**timedelta_kwargs)
+
+    # -----------------------
+    # rainfall events wit custom label
+    rain_events = RainfallEvent.objects\
+        .filter(start_dt__gte=dt)\
+        .annotate(event_label2=ExpressionWrapper(
+            Concat(ExtractYear("start_dt"), Value("-"),ExtractMonth("start_dt")), Value(" | "), F("event_label"),
+            output_field=CharField()
+        ))\
+        .order_by("-start_dt")
+
+    
+    # -----------------------
+    # get GARR data for sensor only for dates/times in events
+    
+    rain_event_queries = [
+        When(Q(ts__gte=re.start_dt) & Q(ts__lte=re.end_dt), then=F(re.event_label2))
+        for re in rain_events
+    ]
+
+    garr1 = select_rainfall_records_back_by_timedelta(
+        GarrRecord,
+        timedelta_kwargs
+    )\
+        .filter(sid=sensor_id)\
+        .annotate(rainfall_event=Case(*rain_event_queries, default=Value(None)))
+
+    latest_garr_ts = garr1.latest("ts").ts
+
+    garr2 = garr1.filter(rainfall_event__in=rain_events.values_list('event_label2', flat=True))
+
+    # -----------------------
+    # summary statistics per event
+
+    garr_summary = garr2.objects\
+        .values("rainfall_event")\
+        .annotate(
+            total=Sum("val"),
+            mean=Avg("val")
+        )
+
+    return garr_summary
