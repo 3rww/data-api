@@ -2,9 +2,12 @@ from datetime import datetime, timedelta
 import gc
 import logging
 from typing import List, Union as Any
+from itertools import chain
 import pdb
 import objgraph
 import json
+
+from codetiming import Timer
 
 from django.utils.timezone import localtime, now
 from django.core.exceptions import ObjectDoesNotExist
@@ -21,7 +24,8 @@ from django.db.models import (
     Avg, 
     Max,
     ExpressionWrapper,
-    CharField
+    CharField,
+    functions as fx
 )
 from django.db.models.functions import Concat, ExtractMonth, ExtractYear
 from django.contrib.gis.db.models import Union
@@ -62,6 +66,10 @@ from .models import (
     RtrrRecord,
     MODELNAME_TO_GEOMODEL_LOOKUP,
     GEOMODEL_SID_FIELD_LOOKUP
+)
+from .selectors import (
+    select_annotated_rainfall_events,
+    select_all_radar_pixel_ids
 )
 from .serializers import (
     ResponseSchema,
@@ -786,57 +794,96 @@ def get_latest_realtime_rainfall_as_gdf(
 
     return gdf
 
-def get_radar_rainfall_summary_from_now( 
-    sensor_id, 
-    timedelta_kwargs={"days":365},
-    round_to_last_quater_hour=True
+@Timer(name="get_radar_rainfall_summary_for_events_from_now", text="{name}: {:.4f}s")
+def get_radar_rainfall_summary_for_events_from_now( 
+    sensor_ids:list=[], 
+    timedelta_kwargs:dict={"days":365},
+    round_to_last_quater_hour:bool=True
     ):
+
+    if not sensor_ids:
+        sensor_ids = select_all_radar_pixel_ids()
 
     # -----------------------
     # datetime from which to query
+    right_now = now()
     if round_to_last_quater_hour:
-        dt = rounded_qtr_hour(now()) - timedelta(**timedelta_kwargs)
+        dt = rounded_qtr_hour(right_now) - timedelta(**timedelta_kwargs)
     else:
-        dt = now() - timedelta(**timedelta_kwargs)
+        dt = right_now - timedelta(**timedelta_kwargs)
 
     # -----------------------
-    # rainfall events wit custom label
-    rain_events = RainfallEvent.objects\
-        .filter(start_dt__gte=dt)\
-        .annotate(event_label2=ExpressionWrapper(
-            Concat(ExtractYear("start_dt"), Value("-"),ExtractMonth("start_dt")), Value(" | "), F("event_label"),
-            output_field=CharField()
-        ))\
-        .order_by("-start_dt")
+    # rainfall events with custom label
+    rain_events = select_annotated_rainfall_events(start_dt=dt)
 
+    # assemble the query's where statements in Django ORM-speak for filtering
+    # GARR records for times during rainfall events only
+    rain_event_queries = [
+        When(
+            # GARR record timestamp falls within start/end of event
+            Q(ts__gte=re.start_dt) & Q(ts__lte=re.end_dt), 
+            # assign extended event label to the new field
+            then=Value(re.event_label_ext)
+        )
+        for re in rain_events
+    ]    
     
     # -----------------------
     # get GARR data for sensor only for dates/times in events
-    
-    rain_event_queries = [
-        When(Q(ts__gte=re.start_dt) & Q(ts__lte=re.end_dt), then=F(re.event_label2))
-        for re in rain_events
-    ]
 
+    # main query
     garr1 = select_rainfall_records_back_by_timedelta(
         GarrRecord,
         timedelta_kwargs
     )\
-        .filter(sid=sensor_id)\
+        .filter(sid__in=sensor_ids)\
         .annotate(rainfall_event=Case(*rain_event_queries, default=Value(None)))
+        # .iterator()
+    # subquery
+    garr2 = garr1\
+        .filter(rainfall_event__in=rain_events.values_list('event_label_ext', flat=True))\
+        .annotate(
+            year=fx.ExtractYear("ts"),
+            month=fx.ExtractMonth("ts"),
+            day=fx.ExtractDay("ts"),
+            type=Value("garr")
+        )
 
-    latest_garr_ts = garr1.latest("ts").ts
-
-    garr2 = garr1.filter(rainfall_event__in=rain_events.values_list('event_label2', flat=True))
-
-    # -----------------------
-    # summary statistics per event
-
-    garr_summary = garr2.objects\
-        .values("rainfall_event")\
+    # summary statistics grouped by month/year
+    garr_summary = garr2\
+        .values("year", "month", "day", "sid")\
         .annotate(
             total=Sum("val"),
             mean=Avg("val")
+        )\
+        .iterator()
+
+    # -----------------------
+    # get RTRR data for sensor for dates/times in events for which GARR 
+    # doesn't exist, and generate summary statistics
+
+    latest_garr_ts = garr1.latest("ts").ts
+
+    rtrr = RtrrRecord.objects\
+        .filter(
+            sid__in=sensor_ids,
+            ts__gt=latest_garr_ts,
+            val__gt=0
+        )\
+        .exclude(val=None)\
+        .annotate(
+            year=fx.ExtractYear("ts"),
+            month=fx.ExtractMonth("ts"),
+            day=fx.ExtractDay("ts"),
+            type=Value("rtrr")
         )
 
-    return garr_summary
+    rtrr_summary = rtrr\
+        .values('year', 'month', 'day', 'sid')\
+        .annotate(
+            total=Sum("val"),
+            mean=Avg("val")
+        )\
+        .iterator()
+
+    return list(chain(garr_summary, rtrr_summary))
