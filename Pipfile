@@ -33,7 +33,7 @@ pytz = "*"
 pyyaml = "*"
 whitenoise = "*"
 marshmallow = "*"
-marshmallow-dataclass = "*"
+marshmallow-dataclass = {extras = ["enum", "union"], version = "*"}
 markdown = "*"
 geojson = "*"
 requests = "*"
