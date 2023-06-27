@@ -5,6 +5,7 @@ Django settings for trwwapi project.
 import os
 from os.path import join, dirname
 from pathlib import Path
+from urllib.parse import urlparse
 from dotenv import load_dotenv
 import dj_database_url
 
@@ -256,14 +257,23 @@ SPECTACULAR_SETTINGS = {
 # Using Python RQ via Django RQ here. Note that the URL for Redis will come
 # from the env by default--this is the case in production. For development, it's
 # looking for the named container 'redis' as stood up by docker-compose
+REDIS_URL = os.getenv('REDIS_URL', 'redis://redis:6379/0')
+
+if 'REDIS_URL' in os.environ.keys():
+    print("NOTICE: connected to production Redis database")
+
+redis_url = urlparse(REDIS_URL)
 
 RQ_QUEUES = {
     'default': {
-        'URL': os.getenv('REDIS_URL', 'redis://redis:6379/0'),
-        'DEFAULT_TIMEOUT': 900,
-        'CONNECTION_KWARGS': {
-            'ssl': True
-        }
+        'HOST': redis_url.hostname,
+        'PORT': redis_url.port,
+        'DB': 0,
+        'USERNAME': redis_url.username,
+        'PASSWORD': redis_url.password,
+        'SSL': True,
+        'SSL_CERT_REQS': None,
+        'DEFAULT_TIMEOUT': 900
     }
 }
 
