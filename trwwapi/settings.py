@@ -261,6 +261,9 @@ RQ_QUEUES = {
     'default': {
         'URL': os.getenv('REDIS_URL', 'redis://redis:6379/0'),
         'DEFAULT_TIMEOUT': 900,
+        'CONNECTION_KWARGS': {
+            'ssl': True
+        }
     }
 }
 
