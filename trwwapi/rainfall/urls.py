@@ -20,7 +20,9 @@ from .views import (
     get_myrain_24hours,
     get_myrain_48hours,
     get_myrain_pastweek,
-    get_latest_realtime_data_for_ago_animation
+    get_latest_realtime_data_for_timeseries_animation,
+    get_radar_rainfall_summary_statistics
+    
 )
 
 # -----------------------------------------------
@@ -61,13 +63,15 @@ urlpatterns = [
     path('v2/gauge/realtime/<str:jobid>/', RainfallRtrgApiView.as_view()),
 
     # --------------------------
-    # custom routes (for function-based views)
+    # custom routes
 
     path('v3/myrain/24hours/', get_myrain_24hours),
     path('v3/myrain/48hours/', get_myrain_48hours),
     path('v3/myrain/pastweek/', get_myrain_pastweek),
 
-    path('v3/realtime/ago/', get_latest_realtime_data_for_ago_animation),
+    path('v3/viz/realtime/', get_latest_realtime_data_for_timeseries_animation),
+    path('v3/viz/radar-summary-stats/', get_radar_rainfall_summary_statistics),
+    #path('v3/viz/radar-summary-stats/<hours>/', get_latest_radar_rainfall_summary_statistics),
     
     # --------------------------
     # low-level DRF-registered routes

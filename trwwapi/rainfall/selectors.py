@@ -1,8 +1,10 @@
 """selectors.py
 
-Pure functions that return Django Querysets
+Pure functions that only read from the database via the Django ORM and return 
+Django Querysets
 
 """
+
 from django.db.models import (
     ExpressionWrapper, 
     Value, 
@@ -10,7 +12,26 @@ from django.db.models import (
     F,
     functions as fx
 )
-from .models import RainfallEvent, Pixel
+from .models import (
+    RainfallEvent, 
+    Pixel,
+    Collection,
+    Boundary,
+    Resource
+)
+
+def select_pixel_ids_for_muni_boundaries(resource_slug="allegheny-county-municipalities"):
+    return
+
+def select_gauge_ids_for_muni_boundaries(resource_slug="allegheny-county-municipalities"):
+    return
+
+def select_pixel_ids_for_watershed_boundaries():
+    return
+
+def select_gauge_ids_for_watershed_boundaries():
+    return
+
 
 def select_all_radar_pixel_ids():
     return Pixel.objects.all().values_list('pixel_id', flat=True)

@@ -1,6 +1,6 @@
 """Common data models and serializers
 """
-from typing import List
+from typing import List, Union
 # import pint
 from dataclasses import dataclass, field, asdict
 from django.db.models.aggregates import Sum
@@ -23,6 +23,7 @@ from django.db.models import (
 from django.template.defaultfilters import default, slugify
 from django.contrib.gis.db.models import PolygonField, MultiPolygonField
 from django.contrib.gis.db.models.functions import Envelope
+from rest_framework import status as http_status
 
 from taggit.managers import TaggableManager
 
@@ -94,7 +95,6 @@ class Boundary(TimestampedMixin):
     class Meta:
         abstract = True
 
-
 @mdc
 class TrwwApiResponseSchema:
     """Implements a consistent JSON response format. Inspired by AWS API Gateway 
@@ -118,10 +118,10 @@ class TrwwApiResponseSchema:
     # contains job metadata and post-processing stats, including an auto-calc'd row count if response_data is parsed; defaults to None
     meta: dict = field(default_factory=dict)
     # any data returned by the API call. If the call returns no data, defaults to None
-    data: dict = None
-    # message, one of [queued, started, deferred, finished, failed]; defaults to success
+    data: Union[dict, list] = None
+    # message, one of [queued, started, deferred, finished, failed, success]; defaults to success
     status: str = 'success'
     # http status code, defaults to 200
-    status_code: int = 200 
+    status_code: int = http_status.HTTP_200_OK
     # list of messages
     messages: List[str] = field(default_factory=list)

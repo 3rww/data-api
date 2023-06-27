@@ -8,9 +8,11 @@ from django.utils.functional import cached_property
 from django_filters import filters
 from django.contrib.gis.geos import Point
 from django.shortcuts import render
+from django.utils import timezone
 
 from rest_framework.request import Request
 from rest_framework.response import Response
+from rest_framework import status
 from rest_framework.filters import SearchFilter
 from rest_framework.views import APIView
 from rest_framework.generics import GenericAPIView
@@ -19,6 +21,7 @@ from rest_framework.decorators import api_view
 from rest_framework.pagination import PageNumberPagination, CursorPagination 
 from django_filters.rest_framework import FilterSet, DjangoFilterBackend
 
+from dateutil.parser import parse
 
 from .serializers import (
     GaugeSerializer,
@@ -35,9 +38,11 @@ from .serializers import (
 )
 from .services import (
     handle_request_for,
-    get_myrain_for,
-    get_latest_timestamps_for_all_models,
-    get_latest_realtime_rainfall_as_gdf
+    myrain_for,
+    latest_timestamps_for_all_models,
+    latest_realtime_rainfall_as_gdf,
+    radar_rainfall_summary_statistics,
+    latest_radar_rainfall_summary_statistics
 )
 from .models import (
     GarrRecord, 
@@ -48,6 +53,9 @@ from .models import (
     Pixel, 
     Gauge
 )
+
+from ..common.config import DELIMITER, TZ, TZI
+from ..common.models import TrwwApiResponseSchema
 
 
 # -------------------------------------------------------------------
@@ -293,7 +301,7 @@ class ActiveGaugeGeoViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Gauge.objects.filter()
     serializer_class = GaugeSerializer
     def get_queryset(self):
-        # filter queryset by public visibility
+        # filter queryset for active gauges
         return self.queryset.filter(active=True)
 
 class PixelGeoViewSet(viewsets.ReadOnlyModelViewSet):
@@ -310,11 +318,11 @@ class LatestObservationTimestampsSummary(viewsets.ReadOnlyModelViewSet):
     event
     """
     def retrieve(self, request, format=None):
-        summary = get_latest_timestamps_for_all_models()
+        summary = latest_timestamps_for_all_models()
         return Response(summary)
 
     def list(self, request, format=None):
-        summary = get_latest_timestamps_for_all_models()
+        summary = latest_timestamps_for_all_models()
         return Response(summary)
 
 # -------------------------------------------------------------------
@@ -322,24 +330,24 @@ class LatestObservationTimestampsSummary(viewsets.ReadOnlyModelViewSet):
 
 def get_myrain_24hours(request):
     lat, lng, srid = request.GET.get('lat'), request.GET.get('lng'), request.GET.get('srid')
-    text = get_myrain_for(lat, lng, srid, timedelta(days=1), "over the past 24 hours")
+    text = myrain_for(lat, lng, srid, timedelta(days=1), "over the past 24 hours")
     return render(request, 'speech.html', {"text": text})
     
 def get_myrain_48hours(request):
     lat, lng, srid = request.GET.get('lat'), request.GET.get('lng'), request.GET.get('srid')
-    text = get_myrain_for(lat, lng, srid, timedelta(days=2), "over the past 48 hours")
+    text = myrain_for(lat, lng, srid, timedelta(days=2), "over the past 48 hours")
     return render(request, 'speech.html', {"text": text})
 
 def get_myrain_pastweek(request):
     lat, lng, srid = request.GET.get('lat'), request.GET.get('lng'), request.GET.get('srid')
-    text = get_myrain_for(lat, lng, srid, timedelta(days=7), "over the past week")
+    text = myrain_for(lat, lng, srid, timedelta(days=7), "over the past week")
     return render(request, 'speech.html', {"text": text})
 
 # -------------------------------------------------------------------
 # Rainfall summaries for AGO
 
 @api_view(["GET"])
-def get_latest_realtime_data_for_ago_animation(request:Request):
+def get_latest_realtime_data_for_timeseries_animation(request:Request):
     """get 
 
     Args:
@@ -353,12 +361,14 @@ def get_latest_realtime_data_for_ago_animation(request:Request):
     hours = request.GET.get("hours", 2)
     f = request.GET.get("f", "split")
     
-    gdf = get_latest_realtime_rainfall_as_gdf(hours=float(hours))
+    gdf = latest_realtime_rainfall_as_gdf(hours=float(hours))
 
     if f == "geojson":
         r = json.loads(
             gdf.to_json(drop_id=True)
         )
+        return Response(r)
+
     else: #elif f == "split"
         # separate x and y columns from wkt column
         gdf['x'] = gdf['wkt'].x
@@ -369,4 +379,77 @@ def get_latest_realtime_data_for_ago_animation(request:Request):
         r = gdf.to_dict(orient="split")
         i = r.pop("index")
 
-    return Response(r)
+        x = TrwwApiResponseSchema(
+                args=request.query_params,
+                data=r
+            )
+        return Response(TrwwApiResponseSchema.Schema().dump(x))
+
+
+
+@api_view(["GET"])
+def get_radar_rainfall_summary_statistics(request:Request):
+    """_summary_
+
+    Args:
+        start_dt (datetime): _description_
+        end_dt (datetime): _description_
+        pixels (string): comma-delimited list of radar pixel IDs
+    """
+
+    # get required parameters and handle if not provided
+    try:
+        start_dt = request.query_params.get("start_dt", None)
+        # start_dt = timezone.localtime(parse(start_dt), TZ)
+        start_dt = parse(start_dt).astimezone(TZI)
+        end_dt = request.GET.get("end_dt", None)
+        # end_dt = timezone.localtime(parse(end_dt), TZ)
+        end_dt = parse(end_dt).astimezone(TZI)
+    except Exception as e:
+        r = TrwwApiResponseSchema(
+            args=request.query_params,
+            status_code=status.HTTP_400_BAD_REQUEST, 
+            status='fail',
+            messages=[
+                e,
+                "Must provide start date/time (`start_dt`) and ending datetime (`end_dt`) query string parameters."
+            ]
+        )
+        return Response(
+            data=TrwwApiResponseSchema.Schema().dump(r), 
+            status=r.status_code
+        )
+
+    # parse optional pixels parameter
+
+    pixels = request.query_params.get("pixels", None)
+    if pixels:
+        sensor_ids = [str(i) for i in pixels.split(DELIMITER)]
+    else:
+        sensor_ids = None
+    
+    results = radar_rainfall_summary_statistics(
+        start_dt=start_dt,
+        end_dt=end_dt,
+        sensor_ids=sensor_ids
+    )
+
+    data = [r for r in results]
+
+    if data:
+        r = TrwwApiResponseSchema(
+            args=request.query_params,
+            data=data
+        )
+    else:
+        r = TrwwApiResponseSchema(
+            args=request.query_params,
+            status_code=status.HTTP_204_NO_CONTENT, 
+            status='fail',
+            messages=["No data returned"]
+        )
+    
+    return Response(
+        data=TrwwApiResponseSchema.Schema().dump(r),
+        status=r.status_code
+    )
