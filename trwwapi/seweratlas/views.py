@@ -79,4 +79,4 @@ def atlas_auth(request:Request):
         )
     )
 
-    return Response(response_data)
+    return Response(asdict(response_data))

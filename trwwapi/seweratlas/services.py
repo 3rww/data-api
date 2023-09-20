@@ -66,7 +66,7 @@ def get_ags_token(
             'password': password,
             'client': client,
             'referer': referer,
-            'expiration': expiration,
+            'expiration': int(expiration),
             'f': 'json',
         }
         response = requests.post(url, data=params)

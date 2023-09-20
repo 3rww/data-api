@@ -379,7 +379,7 @@ ROK_REFERER_URL=os.getenv('ROK_REFERER_URL')
 # AGOL CREDS for accessing 3RWW ArcGIS Online
 ESRI_APP_CLIENT_ID=os.getenv('ESRI_APP_CLIENT_ID')
 ESRI_APP_CLIENT_SECRET=os.getenv('ESRI_APP_CLIENT_SECRET')
-ESRI_APP_TOKEN_EXPIRATION=os.getenv('ESRI_APP_TOKEN_EXPIRATION', 1440)
+ESRI_APP_TOKEN_EXPIRATION=os.getenv('ESRI_APP_TOKEN_EXPIRATION', 120)
 ESRI_AUTH_URL=os.getenv('ESRI_AUTH_URL', 'https://www.arcgis.com/sharing/oauth2/token')
 
 MDS_SSO_REST=os.getenv('MDS_SSO_REST', "https://mds.3riverswetweather.org/sso/sso.ashx")
