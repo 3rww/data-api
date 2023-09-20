@@ -55,6 +55,7 @@ objgraph = "*"
 django-jazzmin = "*"
 ipython = "*"
 django-pivot = "*"
+xmltodict = "*"
 
 [requires]
 python_version = "3.10"

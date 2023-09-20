@@ -66,7 +66,8 @@ INSTALLED_APPS = [
     # 'cloud_browser',
     # our apps
     'trwwapi.rainfall',
-    'trwwapi.rainways'
+    'trwwapi.rainways',
+    'trwwapi.seweratlas'
 ]
 
 MIDDLEWARE = [
@@ -263,7 +264,7 @@ if 'REDIS_URL' in os.environ.keys():
     print("NOTICE: connected to production Redis database")
 
 redis_url = urlparse(REDIS_URL)
-
+# See https://github.com/rq/django-rq/pull/509
 RQ_QUEUES = {
     'default': {
         'HOST': redis_url.hostname,
@@ -363,3 +364,23 @@ DEBUG_TOOLBAR_CONFIG = {
     'SHOW_TOOLBAR_CALLBACK': lambda request: DEBUG,
 }
 
+
+# ------------------------------------------------------------------------------
+# Credentials for connections to external services (from env)
+
+# ROKTECH CREDS for accessing 3RWW & CivicMapper ArcGIS Server services
+ROK_USER=os.getenv('ROK_USER')
+ROK_PW=os.getenv('ROK_PW')
+ROK_AUTH_URL=os.getenv('ROK_AUTH_URL')
+ROK_CLIENT_TYPE=os.getenv('ROK_CLIENT_TYPE','requestip')
+# ROK_CLIENT_TYPE=referer
+ROK_REFERER_URL=os.getenv('ROK_REFERER_URL')
+
+# AGOL CREDS for accessing 3RWW ArcGIS Online
+ESRI_APP_CLIENT_ID=os.getenv('ESRI_APP_CLIENT_ID')
+ESRI_APP_CLIENT_SECRET=os.getenv('ESRI_APP_CLIENT_SECRET')
+ESRI_APP_TOKEN_EXPIRATION=os.getenv('ESRI_APP_TOKEN_EXPIRATION', 1440)
+ESRI_AUTH_URL=os.getenv('ESRI_AUTH_URL', 'https://www.arcgis.com/sharing/oauth2/token')
+
+MDS_SSO_REST=os.getenv('MDS_SSO_REST', "https://mds.3riverswetweather.org/sso/sso.ashx")
+MDS_ORG_KEY=os.getenv('MDS_ORG_KEY')

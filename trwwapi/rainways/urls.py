@@ -24,5 +24,5 @@ urlpatterns = [
     # TODO: dynamic geography-specifc routes (e.g., acsa here becomes a parmeter,
     # which uses a geographic model to select the right data resources for the 
     # analysis)
-    path('public/aoi-analysis/acsa/', rainways_area_of_interest_analysis),
+    # path('public/aoi-analysis/acsa/', rainways_area_of_interest_analysis),
 ]

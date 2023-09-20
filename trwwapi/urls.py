@@ -28,6 +28,7 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('rainfall/', include('trwwapi.rainfall.urls')),
     path('rainways/', include('trwwapi.rainways.urls')),
+    path('sewer-atlas/', include('trwwapi.seweratlas.urls')),
 
     # documentation
     path('schema/', SpectacularAPIView.as_view(), name='schema'),
