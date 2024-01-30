@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+import tempfile
 import gc
 import logging
 from typing import List, Union as Any
@@ -6,7 +7,13 @@ from itertools import chain
 import pdb
 import objgraph
 import json
+import re
+from pathlib import Path
+from dataclasses import dataclass, asdict
 
+from PyPDF2 import PdfReader
+from dateutil.parser import parse
+from pytz import timezone
 from codetiming import Timer
 
 from django.utils.timezone import localtime, now
@@ -887,3 +894,168 @@ def get_radar_rainfall_summary_for_events_from_now(
         .iterator()
 
     return list(chain(garr_summary, rtrr_summary))
+
+
+
+
+# ------------------------------------------------------------------------------
+# Rainfall Report Reader
+
+@dataclass
+class RainfallEventData:
+    report: str
+    name: str
+    start_time: Any[str, datetime]
+    end_time: Any[str, datetime]
+
+def parse_raw_text(raw_text):
+    return [t for t in [t.strip() for t in raw_text.split("\n")] if t not in[' ', '']]
+
+def extract_event_times_from_first_paragraph(
+    text, 
+    patterns=[
+        r'\b\d{4}-\d{2}-\d{2} \d{2}:\d{2}\b',
+        r'\b\d{4} ?-\d{2}-\d{2} \d{2}:\d{2}\b',
+        #r"The analysis period was from (.*) to (.*)"
+    ]) -> Any[list, None]:
+    """regex for extracting event times from the first paragraph for each event 
+    desecription in a Vieux Rainfall report
+
+    Args:
+        text (str): text to search
+        patterns (list, optional): raw regex strings to use to detect event times. Defaults to [ r'\b\d{4}-\d{2}-\d{2} \d{2}:\d{2}\b', r'\b\d{4} ?-\d{2}-\d{2} \d{2}:\d{2}\b', ].
+
+    Returns:
+        Union[list, None]: matches, if any found
+    """
+
+    for pattern in patterns:
+        matches = re.findall(pattern, text)
+        if len(matches) >= 2:
+            return matches
+    return None
+
+def read_report(
+        path_to_csv: Any[str, Path] = None,
+        fstream = None
+    ):
+    """parse a Vieux Rainfall report and return a list of RainfallEvent objects
+
+    Args:
+        path (Union[str, Path]): path to the report on disk
+
+    Returns:
+        List[dict]: list of dicts, each representing a RainfallEvent
+    """
+
+    if not any([fstream, path_to_csv]): 
+        print("No inputs provided.")
+        return None
+
+    if fstream:
+        # write stream to file
+        out_fp, uploaded_csv = tempfile.mkstemp('.csv', 'vieuxreportupload', text=True)
+        with open(uploaded_csv, 'wb+') as destination:
+            for chunk in fstream.chunks():
+                destination.write(chunk)
+    
+    if path_to_csv:
+        uploaded_csv = path_to_csv
+
+    TIMEZONE = timezone("US/Eastern")
+
+    uploaded_csv = Path(uploaded_csv) if isinstance(uploaded_csv, str) else uploaded_csv
+    reader = PdfReader(uploaded_csv)
+
+    # ---------------------------------
+    # find the TOC
+    toc_found = False
+    current_page = 0
+    lines = []
+    while toc_found == False:
+        page = reader.pages[current_page]
+        raw_text = page.extract_text()
+        lines = [t for t in [t.strip() for t in raw_text.split("\n")] if t not in[' ', '']]
+        toc_found = len([ln for ln in lines if "TABLE OF CONTENTS" in ln]) > 0
+        current_page +=1
+    toc_lines = lines
+    toc_page_number = current_page
+    toc_page = reader.pages[toc_page_number]
+    
+    # ---------------------------------
+    # get list of events from TOC
+    all_event_toc_txt = []
+    for idx, txt in enumerate(toc_lines):
+        # find the lines that start with Event (but not "Events")
+        if txt.startswith("Event "):
+            # parse name and page numbers from that text
+            event_toc_txt = [x for x in [i.strip() for i in txt.split(".")] if x != '']
+            if len(event_toc_txt) > 1:
+                all_event_toc_txt.append(event_toc_txt)
+
+    # print("all_event_toc_txt:", all_event_toc_txt)
+    # ---------------------------------
+    # get page content for each event
+    
+    event_txts = []
+    for event_toc_txt in all_event_toc_txt:
+        
+        event_name, page = event_toc_txt
+        page = int(page)
+        
+        # get page indices for start and next
+        page_idxs = [page - 1, page]
+        lines = []
+        # look at start and next page (in case our text of interest spills onto
+        # the next page)
+        for p in page_idxs:
+            # p = event_toc_txt[1] - 1
+            page = reader.pages[p]
+            raw_text = page.extract_text()
+            plines = [t for t in [
+                t.strip() for t in raw_text.split("\n")
+            ] if t not in [' ', '']]
+            lines.extend(plines)
+        # find the text that matches the event name
+        # print("LINES:", lines)
+        idx = lines.index(event_toc_txt[0])
+        # everything after, we search
+        event_txt = " ".join(lines[idx+1:])
+        event_txts.append([event_name, event_txt])
+    
+    results = []
+    for et in event_txts:
+        print("extracting event times from:", et[0])
+        e = et[0].split(":")
+        evt_name = f"{e[0]}: {e[1].strip().replace(' ', '')}"
+        dts = extract_event_times_from_first_paragraph(et[1])
+        if dts is None:
+            continue
+        results.append(asdict(RainfallEventData(
+            report=uploaded_csv.name,
+            name=evt_name,
+            start_time=parse(dts[0]).astimezone(TIMEZONE).isoformat(),
+            end_time=parse(dts[1]).astimezone(TIMEZONE).isoformat(),
+        )))
+    
+    return results
+
+def save_events_from_report(events):
+    status = {"logs":[], "status": "success"}
+    try:
+        res = [
+            RainfallEvent(
+                report_label=e['report'], 
+                event_label=e['name'], 
+                start_dt=e['start_time'], 
+                end_dt=e['end_time']) 
+            for e in events
+        ]
+        for e in res:
+            e.save()
+            status['logs'].append(f"Saved {e}")
+        return status
+    except Exception as e:
+        status['logs'].append(e)
+        status['status'] = 'failed'
+        return status

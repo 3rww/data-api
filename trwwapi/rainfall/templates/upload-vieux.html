@@ -1,0 +1,55 @@
+{% extends "rest_framework/api.html" %}
+{% load static %}
+
+{% block bootstrap_theme %}
+    <link rel="stylesheet" href="{% static 'bs3/bootstrap-3.4.1-dist/css/bootstrap.min.css' %}" type="text/css">
+{% endblock %}
+
+{% block breadcrumbs %}
+<ul class="breadcrumb">
+  {% for breadcrumb_name, breadcrumb_url in breadcrumblist %}
+    {% if forloop.last %}
+      <li class="active"><a href="{{ breadcrumb_url }}">{{ breadcrumb_name }}</a></li>
+    {% else %}
+      <li><a href="{{ breadcrumb_url }}">{{ breadcrumb_name }}</a></li>
+    {% endif %}
+  {% empty %}
+    {% block breadcrumbs_empty %}&nbsp;{% endblock breadcrumbs_empty %}
+  {% endfor %}
+</ul>
+{% endblock %}
+
+{% block content%}
+<div class="container my-lg-5 my-md-5 my-sm-3 px-sm-auto">
+    <div class="row">
+        <div class="col-md-10 offset-md-1">
+        
+            <div class="card">
+                <h3 class="card-header"><span class="mr-auto"><strong>{{title}}</strong></span></h3>
+                <div class="card-body">
+                    {% if form %}
+                    <form method ='post' enctype ="multipart/form-data">
+                        {% csrf_token %}
+                        {{form}}
+                        <br>
+                        <button type="submit" class="btn btn-info btn-block mt-4">Upload</button>
+                    </form>
+                    {% endif %}
+                    <br><br>
+                    {% for message in messages %}
+                    <div class="alert {{ message.tags }} alert-dismissible" role="alert">
+                        <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                        {{ message | safe }}
+                    </div>
+                    {% endfor %}
+
+                </div>
+            </div>
+
+
+        </div>
+    </div>
+</div>
+{% endblock%}

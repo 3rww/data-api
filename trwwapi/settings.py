@@ -384,3 +384,19 @@ ESRI_AUTH_URL=os.getenv('ESRI_AUTH_URL', 'https://www.arcgis.com/sharing/oauth2/
 
 MDS_SSO_REST=os.getenv('MDS_SSO_REST', "https://mds.3riverswetweather.org/sso/sso.ashx")
 MDS_ORG_KEY=os.getenv('MDS_ORG_KEY')
+
+# ------------------------------------------------------------------------------
+# Messages
+
+
+try:
+    from django.contrib.messages import constants as messages
+    MESSAGE_TAGS = {
+        messages.DEBUG: 'alert-info',
+        messages.INFO: 'alert-info',
+        messages.SUCCESS: 'alert-success',
+        messages.WARNING: 'alert-warning',
+        messages.ERROR: 'alert-danger',
+    }
+except Exception as e:
+    pass

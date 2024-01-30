@@ -7,7 +7,9 @@ from django.core.paginator import Paginator
 from django.utils.functional import cached_property
 from django_filters import filters
 from django.contrib.gis.geos import Point
-from django.shortcuts import render
+from django.contrib import messages
+from django.shortcuts import render, redirect
+from django.contrib.auth.decorators import login_required
 
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -37,7 +39,9 @@ from .services import (
     handle_request_for,
     get_myrain_for,
     get_latest_timestamps_for_all_models,
-    get_latest_realtime_rainfall_as_gdf
+    get_latest_realtime_rainfall_as_gdf,
+    read_report,
+    save_events_from_report
 )
 from .models import (
     GarrRecord, 
@@ -48,6 +52,7 @@ from .models import (
     Pixel, 
     Gauge
 )
+from .forms import UploadVieuxRainfallReport
 
 
 # -------------------------------------------------------------------
@@ -370,3 +375,35 @@ def get_latest_realtime_data_for_ago_animation(request:Request):
         i = r.pop("index")
 
     return Response(r)
+
+
+@login_required
+def upload_vieuxreport_file(request):
+    """form-based view for uploading a Hobolink CSV
+    """
+    if request.method == 'POST':
+        form = UploadVieuxRainfallReport(request.POST, request.FILES)
+        if form.is_valid():
+            events = read_report(fstream=request.FILES['file'])
+            status = save_events_from_report(events)
+            if status:
+                # HttpResponse(f'The file is saved {status}')
+                if status['status'] == "success":
+                    for log in status['logs']:
+                        messages.add_message(request, messages.INFO, log)
+                    messages.add_message(request, messages.SUCCESS, f"The Vieux Rainfall Report was successfully uploaded. {len(status['logs'])} events were created.")
+                else:
+                    messages.add_message(request, messages.ERROR, 'There was a problem processing the file you provided.')
+                    for log in status['logs']:
+                        messages.add_message(request, messages.ERROR, log)
+            else:
+                messages.add_message(request, messages.WARNING, 'No input provided.')
+            return redirect('uploadvieuxreport')
+    else:
+        form = UploadVieuxRainfallReport()
+    return render(request, 'upload-vieux.html', {
+        'form': form, 
+        'title': 'Upload | Vieux Rainfall Report PDF',
+        'breadcrumblist': [('Rainfall', '/rainfall/'), ('Upload Vieux Report', '/rainfall/upload-vieux-report/')]
+        }
+    )

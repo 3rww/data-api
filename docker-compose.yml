@@ -16,20 +16,20 @@ services:
         volumes:
             - /var/lib/postgresql/data/
         env_file: scripts/docker/.env
-    db-init:
-        build:
-            context: .
-            dockerfile: scripts/docker/db-init/Dockerfile
-        depends_on:
-            - db
-        env_file: scripts/docker/.env
-    rainfall-db-init:
-        build:
-            context: .
-            dockerfile: scripts/docker/rainfall-db-init/Dockerfile
-        depends_on:
-            - rainfall_db
-        env_file: scripts/docker/.env
+    # db-init:
+    #     build:
+    #         context: .
+    #         dockerfile: scripts/docker/db-init/Dockerfile
+    #     depends_on:
+    #         - db
+    #     env_file: scripts/docker/.env
+    # rainfall-db-init:
+    #     build:
+    #         context: .
+    #         dockerfile: scripts/docker/rainfall-db-init/Dockerfile
+    #     depends_on:
+    #         - rainfall_db
+    #     env_file: scripts/docker/.env
     redis:
         image: redis:alpine
         ports:

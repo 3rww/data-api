@@ -56,6 +56,7 @@ django-jazzmin = "*"
 ipython = "*"
 django-pivot = "*"
 xmltodict = "*"
+PyPDF2 = "*"
 
 [requires]
 python_version = "3.10"

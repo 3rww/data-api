@@ -20,7 +20,8 @@ from .views import (
     get_myrain_24hours,
     get_myrain_48hours,
     get_myrain_pastweek,
-    get_latest_realtime_data_for_ago_animation
+    get_latest_realtime_data_for_ago_animation,
+    upload_vieuxreport_file
 )
 
 # -----------------------------------------------
@@ -68,6 +69,8 @@ urlpatterns = [
     path('v3/myrain/pastweek/', get_myrain_pastweek),
 
     path('v3/realtime/ago/', get_latest_realtime_data_for_ago_animation),
+
+    path('upload-vieux-report/', upload_vieuxreport_file, name='uploadvieuxreport'),
     
     # --------------------------
     # low-level DRF-registered routes
